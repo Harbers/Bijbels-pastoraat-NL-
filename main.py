@@ -11,13 +11,14 @@ def root():
     return {"status": "Backend GPT is actief"}
 
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
-    # Vervang onderstaande URL door de werkelijke bron van de Jongbloed-editie van de Statenvertaling
-    url = f"https://voorbeeld.nl/statenvertaling/{quote(book)}/{chapter}/{verse}"
+    # Gebruik de bron van de Statenvertaling (Jongbloed-editie)
+    url = f"https://www.statenvertaling.net/bijbel/{quote(book)}/{chapter}/{verse}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de bijbeltekst.")
     soup = BeautifulSoup(response.text, "html.parser")
+    # Pas dit element aan indien nodig, afhankelijk van de HTML-structuur van de bron
     text_div = soup.find("div", {"id": "tekst"})
     if not text_div:
         raise HTTPException(status_code=404, detail="Bijbeltekst niet gevonden.")
@@ -25,12 +26,14 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
     return text_div.get_text(strip=True)
 
 def get_psalm_text(psalm: int, psvID: int) -> str:
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={psvID}#psvs"
+    # Gebruik de bron van de 1773 berijming voor psalmen en gezangen
+    url = f"https://psalmboek.nl/psalmen.php?psalm={psalm}&psvID={psvID}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de psalmtekst.")
     soup = BeautifulSoup(response.text, "html.parser")
+    # Aangenomen wordt dat de tekst zich bevindt in een element met id "psvs"
     div = soup.find("div", {"id": "psvs"})
     if not div:
         raise HTTPException(status_code=404, detail="Psalmtekst niet gevonden.")
