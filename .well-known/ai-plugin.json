@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Bijbels Pastoraat NL",
+  "name_for_model": "bijbels_pastoraat_nl",
+  "description_for_human": "Een backend om de Statenvertaling (Jongbloed) en psalmen (berijming 1773) letterlijk te citeren.",
+  "description_for_model": "Deze plugin haalt 100% letterlijke bijbel- en psalmteksten op voor gebruik in een GPT-omgeving.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+  "url": "https://bijbelbackend.onrender.com"
+},
+"logo_url": "https://bijbelbackend.onrender.com/logo.png",
+"contact_email": "hans.harbers@solcon.nl",
+"legal_info_url": "https://bijbelbackend.onrender.com/legal"
+}
