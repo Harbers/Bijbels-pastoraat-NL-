@@ -11,12 +11,18 @@ from bs4 import BeautifulSoup
 from urllib.parse import quote, urljoin
 from functools import lru_cache
 
-# Selenium imports
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+# Probeer Selenium te importeren; als dit mislukt, zetten we SELENIUM_AVAILABLE op False
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    # Log dat Selenium niet beschikbaar is
+    logging.warning("Selenium is niet geïnstalleerd; Selenium-fallback zal niet werken.")
 
 # Configureer logging op debug-niveau
 logging.basicConfig(level=logging.DEBUG)
@@ -32,7 +38,7 @@ api_router = APIRouter(prefix="/api")
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
 
-# Voor berijmde psalmen (voorbeeld)
+# Interne mapping voor berijmde psalmen (voorbeeld)
 BERIJMD_VERZEN = {
     119: 50,
     138: 1
@@ -82,7 +88,7 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
-                # Gebruik newline als separator om <br>-elementen correct om te zetten
+                # Gebruik newline als separator om <br>-elementen om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
@@ -116,6 +122,10 @@ def extract_text_via_selenium(url: str) -> str:
     Laadt de pagina via een headless browser (Selenium) en wacht tot het element met id 'belijdenis_item'
     zichtbaar is, alsof een gebruiker de link handmatig opent.
     """
+    if not SELENIUM_AVAILABLE:
+        logger.error("Selenium is niet beschikbaar in deze omgeving.")
+        raise HTTPException(status_code=500, detail="Selenium is niet beschikbaar.")
+    
     options = Options()
     options.headless = True
     options.add_argument("--disable-gpu")
@@ -162,7 +172,7 @@ def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
     html = cached_get(unique_url)
     try:
         verse_text = extract_verse_from_html(html, psalm, vers)
-    except HTTPException:
+    except HTTPException as e:
         logger.debug("Reguliere extractie mislukt, probeer Selenium fallback.")
         verse_text = extract_text_via_selenium(unique_url)
     if not verse_text:
