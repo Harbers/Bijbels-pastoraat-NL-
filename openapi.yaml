@@ -8,40 +8,6 @@ servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
 
 paths:
-  /bible/{book}/{chapter}/{verse}:
-    get:
-      summary: "Haal een bijbeltekst op"
-      operationId: get_bible_text
-      parameters:
-        - name: book
-          in: path
-          required: true
-          schema:
-            type: string
-          description: "Naam van het bijbelboek."
-        - name: chapter
-          in: path
-          required: true
-          schema:
-            type: integer
-          description: "Het hoofdstuknummer."
-        - name: verse
-          in: path
-          required: true
-          schema:
-            type: integer
-          description: "Het versnummer."
-      responses:
-        '200':
-          description: "De opgehaalde bijbeltekst"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  text:
-                    type: string
-
   /psalm:
     get:
       summary: "Haal een psalmvers op"
