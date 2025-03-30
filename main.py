@@ -10,9 +10,13 @@ from fastapi import FastAPI, APIRouter, HTTPException, Query
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urljoin
 from functools import lru_cache
+
+# Selenium imports
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Configureer logging op debug-niveau
 logging.basicConfig(level=logging.DEBUG)
@@ -28,7 +32,7 @@ api_router = APIRouter(prefix="/api")
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
 
-# Interne mapping voor berijmde psalmen (voorbeeld)
+# Voor berijmde psalmen (voorbeeld)
 BERIJMD_VERZEN = {
     119: 50,
     138: 1
@@ -62,11 +66,6 @@ def strip_text(html_content: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 def extract_structured_verses(html_content: str) -> dict:
-    """
-    Bouwt een mapping op van versnummers naar tekst, gebaseerd op div's met de
-    klasse 'vers belijdenis_inhoud line_breaks ritmisch'. Hierbij gebruiken we
-    get_text met een newline-separator zodat <br>-elementen correct worden verwerkt.
-    """
     soup = BeautifulSoup(html_content, "html.parser")
     verse_divs = soup.find_all("div", class_="vers belijdenis_inhoud line_breaks ritmisch")
     verses = {}
@@ -83,19 +82,17 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
-                # Gebruik newline als separator om <br>-tags om te zetten naar linebreaks
+                # Gebruik newline als separator om <br>-elementen correct om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
     return verses
 
 def extract_verse_fallback(text: str, psalm: int, vers: int) -> str:
-    # Eerste fallback: splitsen op newlines
     lines = re.split(r'\n+', text.strip())
     logger.debug(f"Fallback 1 (newline-splitsing): {len(lines)} regels gevonden.")
     if len(lines) >= vers:
         return lines[vers - 1].strip()
-    # Tweede fallback: gebruik BeautifulSoup om <br> te verwerken
     soup = BeautifulSoup(text, "html.parser")
     br_text = soup.get_text(separator="\n", strip=True)
     br_lines = br_text.split("\n")
@@ -116,30 +113,33 @@ def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
 
 def extract_text_via_selenium(url: str) -> str:
     """
-    Laadt de pagina via een headless browser (Selenium) en retourneert de innerText van het
-    element met id 'belijdenis_item'. Dit bootst de handmatige weergave na.
+    Laadt de pagina via een headless browser (Selenium) en wacht tot het element met id 'belijdenis_item'
+    zichtbaar is, alsof een gebruiker de link handmatig opent.
     """
     options = Options()
     options.headless = True
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--window-size=1920,1080")
+    
     try:
         driver = webdriver.Chrome(options=options)
     except Exception as e:
         logger.error("Selenium WebDriver kon niet worden gestart: " + str(e))
         raise HTTPException(status_code=500, detail="Selenium WebDriver niet beschikbaar.")
+    
     try:
         logger.debug(f"Selenium: Laden van URL: {url}")
         driver.get(url)
-        time.sleep(3)  # Wacht tot de pagina volledig is geladen
-        try:
-            element = driver.find_element(By.ID, "belijdenis_item")
-            text = element.get_attribute("innerText")
-        except Exception:
-            text = driver.page_source
+        # Wacht tot het element met id 'belijdenis_item' zichtbaar is (max 10 seconden)
+        wait = WebDriverWait(driver, 10)
+        element = wait.until(EC.visibility_of_element_located((By.ID, "belijdenis_item")))
+        text = element.get_attribute("innerText")
         logger.debug("Selenium: Tekst succesvol geëxtraheerd.")
         return text
+    except Exception as e:
+        logger.error("Selenium: Fout tijdens extractie: " + str(e))
+        raise HTTPException(status_code=500, detail="Selenium extractie mislukt.")
     finally:
         driver.quit()
 
