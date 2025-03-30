@@ -88,7 +88,6 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
-                # Gebruik newline als separator om <br>-elementen om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
@@ -112,7 +111,6 @@ def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
     if verses and vers in verses:
         extracted = verses[vers].strip()
         logger.debug(f"Gestructureerde extractie succesvol voor vers {vers}: {extracted[:60]}...")
-        # Als de output te kort is of onverwacht (bijv. "psalmen" of "zingen"), schakelen we over op fallback.
         if len(extracted) < 10 or extracted.strip().lower() in ["psalmen", "zingen"]:
             logger.debug(f"Extractie geeft onvolledige tekst ('{extracted}'), overschakelen naar fallback.")
             full_text = strip_text(html_content)
@@ -124,43 +122,8 @@ def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
         text = strip_text(html_content)
         return extract_verse_fallback(text, psalm, vers)
 
-def extract_text_via_selenium(url: str) -> str:
-    """
-    Laadt de pagina via een headless browser (Selenium) en wacht tot het element met id 'belijdenis_item'
-    zichtbaar is, alsof een gebruiker de link handmatig opent.
-    """
-    if not SELENIUM_AVAILABLE:
-        logger.error("Selenium is niet beschikbaar in deze omgeving.")
-        raise HTTPException(status_code=500, detail="Selenium is niet beschikbaar.")
-    
-    options = Options()
-    options.headless = True
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--window-size=1920,1080")
-    
-    try:
-        driver = webdriver.Chrome(options=options)
-    except Exception as e:
-        logger.error("Selenium WebDriver kon niet worden gestart: " + str(e))
-        raise HTTPException(status_code=500, detail="Selenium WebDriver niet beschikbaar.")
-    
-    try:
-        logger.debug(f"Selenium: Laden van URL: {url}")
-        driver.get(url)
-        wait = WebDriverWait(driver, 10)
-        element = wait.until(EC.visibility_of_element_located(("id", "belijdenis_item")))
-        text = element.get_attribute("innerText")
-        logger.debug("Selenium: Tekst succesvol geëxtraheerd.")
-        return text
-    except Exception as e:
-        logger.error("Selenium: Fout tijdens extractie: " + str(e))
-        raise HTTPException(status_code=500, detail="Selenium extractie mislukt.")
-    finally:
-        driver.quit()
-
+# Functie om de Psalm-tekst via een statische pagina van Psalmboek.nl op te halen
 def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
-    # Gebruik direct de basis-URL voor de "zingen.php" pagina
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(base_url)
     logger.debug("HTML snippet: " + html[:500])
@@ -180,6 +143,7 @@ def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
             raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
     return verse_text
 
+# Functie voor het ophalen van de tekst van de bijbelvers
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
     url = f"https://www.statenvertaling.net/bijbel/{quote(book)}/{chapter}/{verse}"
     html = cached_get(url)
@@ -188,6 +152,7 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
         raise HTTPException(status_code=404, detail="Bijbeltekst niet gevonden.")
     return text
 
+# API-endpoints
 @api_router.get("/bible/{book}/{chapter}/{verse}")
 def bible_endpoint(book: str, chapter: int, verse: int):
     text = get_bible_text(book, chapter, verse)
@@ -212,12 +177,6 @@ def psalm_endpoint(
     else:
         raise HTTPException(status_code=400, detail="Onbekende bronparameter.")
     return {"text": text, "unique_url": unique_url}
-
-# Extra testendpoint met Selenium om te controleren of de headless browser werkt
-@api_router.get("/scrape")
-def scrape_endpoint(url: str = Query(..., description="De URL die gescraped moet worden")):
-    text = extract_text_via_selenium(url)
-    return {"url": url, "text": text}
 
 # Voeg de API-router toe met de prefix "/api"
 app.include_router(api_router, prefix="/api")
