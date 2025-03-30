@@ -11,7 +11,18 @@ import re
 
 app = FastAPI()
 
-# Root-route zodat de hoofd-URL een statusbericht geeft
+# --------------------------------------------------------------------
+# STATIC OUTBOUND IP ADDRESSES
+# Network requests from this service to the public internet will come from one of these IP addresses:
+#  - 18.156.158.53
+#  - 18.156.42.200
+#  - 52.59.103.54
+# Deze IP-adressen kunnen gebruikt worden voor het instellen van whitelists of firewall-regels
+# bij externe API's en bronnen.
+# --------------------------------------------------------------------
+STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
+
+# Root-route voor statuscontrole
 @app.get("/")
 def root():
     return {"status": "Bijbels Pastoraat API draait correct"}
@@ -33,8 +44,8 @@ def cached_get(url: str) -> str:
 def strip_text(html_content: str) -> str:
     """
     Verwerk de HTML-content en retourneer de tekst.
-    Er wordt eerst gezocht naar een container met een herkenbare id (bijvoorbeeld "psalm-tekst" of "psalmtekst").
-    Als die niet aanwezig is, wordt de gehele tekst van de pagina gebruikt.
+    Probeert eerst een container met id "psalm-tekst" of "psalmtekst" te vinden.
+    Als deze niet wordt gevonden, wordt de gehele tekst van de pagina gebruikt.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     container = soup.find("div", {"id": "psalm-tekst"}) or soup.find("div", {"id": "psalmtekst"})
@@ -47,8 +58,8 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
     Extraheert het gevraagde vers uit de volledige psalmtekst.
     
     1. Eerst wordt gezocht naar een marker met het patroon "Vers <nummer>" (bijv. "Vers 3").
-       Indien gevonden, wordt de tekst tussen de marker en de volgende marker als het vers beschouwd.
-    2. Als er geen duidelijke markers zijn, wordt de tekst opgedeeld in regels (gesplitst op nieuwe regels),
+       Als die marker wordt gevonden, wordt de tekst tussen deze marker en de volgende marker als het vers beschouwd.
+    2. Als geen duidelijke marker wordt gevonden, wordt de tekst opgedeeld in regels (gesplitst op nieuwe regels)
        en wordt de regel op positie (vers - 1) teruggegeven.
        
     Deze aanpak is universeel toepasbaar voor alle psalmen, mits de bron een consistente structuur hanteert.
@@ -58,14 +69,14 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
     m = pattern.search(text)
     if m:
         start = m.end()
-        # Zoek de volgende marker (bijvoorbeeld "Vers 4") als die bestaat
+        # Zoek naar de volgende marker (bijv. "Vers 4") als die bestaat
         pattern_next = re.compile(rf'Vers\s*[:.]?\s*\d+', re.IGNORECASE)
         m_next = pattern_next.search(text, pos=start)
         end = m_next.start() if m_next else len(text)
         verse_text = text[start:end].strip()
         if verse_text:
             return verse_text
-    # Als geen marker gevonden is, splits dan de tekst op nieuwe regels en neem de regel op positie (vers - 1)
+    # Fallback: splits de tekst op nieuwe regels en neem de regel op positie (vers - 1)
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     if 1 <= vers <= len(lines):
         return lines[vers - 1]
