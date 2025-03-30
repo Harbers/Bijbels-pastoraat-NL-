@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import quote, urljoin
 from functools import lru_cache
 
-# Probeer Selenium te importeren; als dit mislukt, zetten we SELENIUM_AVAILABLE op False
+# Probeer Selenium te importeren; als dit mislukt, schakelen we Selenium-fallback uit.
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
@@ -21,7 +21,6 @@ try:
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
-    # Log dat Selenium niet beschikbaar is
     logging.warning("Selenium is niet geïnstalleerd; Selenium-fallback zal niet werken.")
 
 # Configureer logging op debug-niveau
@@ -88,7 +87,6 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
-                # Gebruik newline als separator om <br>-elementen om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
@@ -141,9 +139,8 @@ def extract_text_via_selenium(url: str) -> str:
     try:
         logger.debug(f"Selenium: Laden van URL: {url}")
         driver.get(url)
-        # Wacht tot het element met id 'belijdenis_item' zichtbaar is (max 10 seconden)
         wait = WebDriverWait(driver, 10)
-        element = wait.until(EC.visibility_of_element_located((By.ID, "belijdenis_item")))
+        element = wait.until(EC.visibility_of_element_located(("id", "belijdenis_item")))
         text = element.get_attribute("innerText")
         logger.debug("Selenium: Tekst succesvol geëxtraheerd.")
         return text
@@ -172,7 +169,7 @@ def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
     html = cached_get(unique_url)
     try:
         verse_text = extract_verse_from_html(html, psalm, vers)
-    except HTTPException as e:
+    except HTTPException:
         logger.debug("Reguliere extractie mislukt, probeer Selenium fallback.")
         verse_text = extract_text_via_selenium(unique_url)
     if not verse_text:
@@ -212,5 +209,15 @@ def psalm_endpoint(
     else:
         raise HTTPException(status_code=400, detail="Onbekende bronparameter.")
     return {"text": text, "unique_url": unique_url}
+
+# Extra testendpoint met Selenium
+@api_router.get("/scrape")
+def scrape_endpoint(url: str = Query(..., description="De URL die gescraped moet worden")):
+    """
+    Testendpoint om een URL via Selenium te laden en de gerenderde tekst terug te geven.
+    Dit bootst het handmatig openen van een link na.
+    """
+    text = extract_text_via_selenium(url)
+    return {"url": url, "text": text}
 
 app.include_router(api_router, prefix="/api")
