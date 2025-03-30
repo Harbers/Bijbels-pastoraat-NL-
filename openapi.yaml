@@ -1,4 +1,4 @@
-openapi: 3.0.1
+openapi: 3.1.0
 info:
   title: Backend GPT API
   version: "1.0"
@@ -6,11 +6,12 @@ info:
 
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
-  
+
 paths:
   /bible/{book}/{chapter}/{verse}:
     get:
       summary: Haal een bijbeltekst op
+      operationId: get_bible_text
       parameters:
         - name: book
           in: path
@@ -32,7 +33,7 @@ paths:
           description: Het versnummer.
       responses:
         '200':
-          description: De 100% letterlijk geciteerde bijbeltekst.
+          description: De bijbeltekst
           content:
             application/json:
               schema:
@@ -40,10 +41,11 @@ paths:
                 properties:
                   text:
                     type: string
-                    description: De bijbeltekst.
+
   /psalm:
     get:
-      summary: Haal een psalmvers op uit de berijming van 1773.
+      summary: Haal een psalmvers op
+      operationId: get_psalm_text
       parameters:
         - name: psalm
           in: query
@@ -56,16 +58,16 @@ paths:
           required: true
           schema:
             type: integer
-          description: Het versnummer binnen de psalm.
+          description: Het versnummer.
         - name: hash
           in: query
           required: false
           schema:
             type: string
-          description: Optioneel anker voor navigatie.
+          description: Anker
       responses:
         '200':
-          description: De 100% letterlijk geciteerde psalmtekst.
+          description: De psalmtekst
           content:
             application/json:
               schema:
@@ -73,4 +75,3 @@ paths:
                 properties:
                   text:
                     type: string
-                    description: De psalmtekst.
