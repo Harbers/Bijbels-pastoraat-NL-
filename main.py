@@ -33,7 +33,7 @@ app = FastAPI()
 def root():
     return {"status": "Bijbels Pastoraat API draait correct"}
 
-# Maak de API-router zonder vooraf ingestelde prefix; we voegen deze later toe.
+# Maak de API-router zonder vooraf ingestelde prefix; we voegen deze toe met prefix later.
 api_router = APIRouter()
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
@@ -88,7 +88,6 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
-                # Gebruik newline als separator om <br>-elementen om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
@@ -110,8 +109,14 @@ def extract_verse_fallback(text: str, psalm: int, vers: int) -> str:
 def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
     verses = extract_structured_verses(html_content)
     if verses and vers in verses:
-        logger.debug(f"Gestructureerde extractie succesvol voor vers {vers}: {verses[vers][:60]}...")
-        return verses[vers]
+        extracted = verses[vers].strip()
+        logger.debug(f"Gestructureerde extractie succesvol voor vers {vers}: {extracted[:60]}...")
+        # Als de output te kort is of onverwacht ("zingen"), ga naar fallback
+        if len(extracted) < 10 or extracted.lower() == "zingen":
+            logger.debug("Extractie geeft te korte tekst, overschakelen naar fallback.")
+            text = strip_text(html_content)
+            return extract_verse_fallback(text, psalm, vers)
+        return extracted
     else:
         logger.debug("Gestructureerde extractie mislukt, gebruik fallback-methode.")
         text = strip_text(html_content)
@@ -141,7 +146,6 @@ def extract_text_via_selenium(url: str) -> str:
     try:
         logger.debug(f"Selenium: Laden van URL: {url}")
         driver.get(url)
-        # Wacht tot het element met id 'belijdenis_item' zichtbaar is (max 10 seconden)
         wait = WebDriverWait(driver, 10)
         element = wait.until(EC.visibility_of_element_located(("id", "belijdenis_item")))
         text = element.get_attribute("innerText")
@@ -162,8 +166,8 @@ def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
     except HTTPException:
         logger.debug("Reguliere extractie mislukt, probeer Selenium fallback.")
         verse_text = extract_text_via_selenium(base_url)
-    if not verse_text:
-        logger.error("Geen psalmvers gevonden na extractie.")
+    if not verse_text or verse_text.strip().lower() == "zingen":
+        logger.error("Geen bruikbare psalmtekst gevonden na extractie.")
         raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
     return verse_text
 
