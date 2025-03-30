@@ -73,4 +73,4 @@ def serve_ai_plugin():
 @app.get("/openapi.yaml", include_in_schema=False)
 def serve_openapi():
     bestandspad = os.path.join(os.path.dirname(__file__), "openapi.yaml")
-    return FileResponse(bestandspad, media_type="application/yaml")
+    return FileResponse(bestandspad, media_type="text/yaml")
