@@ -15,7 +15,9 @@ def root():
     return {"status": "Backend API is actief"}
 
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
-    # Haal de bijbeltekst op via een externe bron (Statenvertaling, Jongbloed-editie)
+    """
+    Haal de bijbeltekst op via een externe bron (Statenvertaling, Jongbloed-editie).
+    """
     url = f"https://www.statenvertaling.net/bijbel/{quote(book)}/{chapter}/{verse}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
@@ -50,32 +52,27 @@ def get_psalm_text_fallback(psalm: int, vers: int) -> str:
 
 def get_psalm_text(psalm: int, vers: int) -> str:
     """
-    Probeer eerst de psalmtekst op te halen via de primaire externe bron (liturgie.nu).
-    Indien dit mislukt, wordt de fallback-bron (bijbelbox.nl) gebruikt.
-    De URL-structuur is aangepast naar queryparameters.
+    Haal de psalmtekst op via de primaire externe bron (psalmen1773.nl) die de 1773-berijming aanbiedt.
+    Indien deze bron niet het gewenste resultaat oplevert, wordt de fallback-bron (bijbelbox.nl) gebruikt.
     """
-    url_primary = f"https://www.liturgie.nu/psalmen?psalmnummer={psalm}&vers={vers}"
+    url_primary = f"https://www.psalmen1773.nl/psalmen/{psalm}/{vers}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url_primary, headers=headers)
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, "html.parser")
-        text_div = soup.find("div", {"id": "psalmtekst"})
+        # Veronderstel dat de psalmtekst in een <div> met de klasse "psalm-tekst" staat.
+        text_div = soup.find("div", {"class": "psalm-tekst"})
         if text_div:
             text = text_div.get_text(separator="\n", strip=True)
-        else:
-            text = soup.get_text(separator="\n", strip=True)
-        lines = [re.sub(r'\s+', ' ', line) for line in text.splitlines()]
-        normalized_text = "\n".join(lines)
-        if not normalized_text.strip():
-            return get_psalm_text_fallback(psalm, vers)
-        return normalized_text
-    else:
-        return get_psalm_text_fallback(psalm, vers)
+            if text:
+                return text
+    # Gebruik de fallback-bron indien de primaire bron niet het gewenste resultaat oplevert.
+    return get_psalm_text_fallback(psalm, vers)
 
 @app.get("/bible/{book}/{chapter}/{verse}")
 def bible_endpoint(book: str, chapter: int, verse: int):
     """
-    Haal een bijbeltekst op uit de externe bron (Statenvertaling, Jongbloed-editie).
+    Endpoint voor het ophalen van een bijbeltekst uit de externe bron (Statenvertaling, Jongbloed-editie).
     """
     text = get_bible_text(book, chapter, verse)
     return {"text": text}
@@ -87,7 +84,7 @@ def psalm_endpoint(
     hash: str = Query(None, description="Optioneel anker voor navigatie")
 ):
     """
-    Haal een psalmvers op via een primaire externe bron (liturgie.nu) met fallback naar bijbelbox.nl.
+    Endpoint voor het ophalen van een psalmvers via de primaire bron (psalmen1773.nl) met fallback naar bijbelbox.nl.
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
