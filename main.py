@@ -10,7 +10,7 @@ from functools import lru_cache
 import re
 import logging
 
-# Configureer logging
+# Stel logging in voor debugging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("psalm_api")
 
@@ -34,11 +34,11 @@ def cached_get(url: str) -> str:
         return response.text
     else:
         logger.error(f"Fout bij ophalen van URL: {url} - Status: {response.status_code}")
-        raise HTTPException(status_code=response.status_code, detail=f"Fout bij ophalen van URL: {url}")
+        raise HTTPException(status_code=response.status_code,
+                            detail=f"Fout bij ophalen van URL: {url}")
 
 def strip_text(html_content: str) -> str:
     soup = BeautifulSoup(html_content, "html.parser")
-    # Zoek eerst naar een container die de psalmtekst bevat
     container = soup.find("div", {"id": "psalm-tekst"}) or soup.find("div", {"id": "psalmtekst"})
     if container:
         logger.debug("Container voor psalmtekst gevonden.")
@@ -47,7 +47,13 @@ def strip_text(html_content: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 def extract_verse(text: str, psalm: int, vers: int) -> str:
-    # Gebruik meerdere regex-patronen om flexibeler te zijn:
+    """
+    Extraheert het gevraagde vers uit de volledige psalmtekst.
+    
+    1. Probeer eerst expliciete markers te vinden (losser ingestelde regex’s).
+    2. Als dat niet lukt, splits de tekst op newlines.
+    3. Als dat te weinig regels oplevert, probeer dan te splitsen op interpunctie (bijv. punt, komma, puntkomma).
+    """
     patterns = [
         re.compile(rf'Psalm\s*{psalm}\s*[:\-]\s*{vers}\b', re.IGNORECASE),
         re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE),
@@ -64,11 +70,19 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
             if verse_text:
                 logger.debug(f"Marker gevonden met patroon {pattern.pattern}: {verse_text[:60]}...")
                 return verse_text
-    # Fallback: splits de tekst op één of meer newlines
+
+    # Eerste fallback: splitsen op newlines
     lines = re.split(r'\n+', text.strip())
-    logger.debug(f"Geïntegreerd fallback: {len(lines)} regels gevonden.")
-    if 1 <= vers <= len(lines):
+    if len(lines) >= vers:
+        logger.debug(f"Nieuwe regels fallback: {len(lines)} regels gevonden.")
         return lines[vers - 1].strip()
+
+    # Tweede fallback: splitsen op interpunctie (punt, komma, puntkomma)
+    splits = re.split(r'[.,;]+', text.strip())
+    if len(splits) >= vers:
+        logger.debug(f"Interpunctie fallback: {len(splits)} segmenten gevonden.")
+        return splits[vers - 1].strip()
+
     raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
 
 def get_unique_psalm_url(psalm: int, vers: int) -> str:
