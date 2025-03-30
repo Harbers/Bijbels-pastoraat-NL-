@@ -19,6 +19,9 @@ def root():
 # Maak een API-router met prefix "/api"
 api_router = APIRouter()
 
+# Statische outbound IP-adressen (voor whitelisting indien nodig)
+STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
+
 # Eenvoudige cache voor HTTP-aanvragen
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
@@ -32,7 +35,7 @@ def cached_get(url: str) -> str:
 
 def strip_text(html_content: str) -> str:
     """
-    Verwerk de HTML-content en retourneer de tekst.
+    Verwerkt de HTML-content en retourneert de tekst.
     Probeert eerst een container met id "psalm-tekst" of "psalmtekst" te vinden.
     Als deze niet wordt gevonden, retourneert hij de volledige pagina-tekst.
     """
@@ -46,52 +49,62 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
     """
     Extraheert het gevraagde vers uit de volledige psalmtekst.
     
-    1. We proberen eerst expliciet te zoeken naar een marker waarin de header "Psalm <psalm>" 
-       gevolgd door een aanduiding van het vers (bijvoorbeeld "Psalm 119:3" of "Psalm 119 vers 3") voorkomt.
-    2. Als een dergelijke marker wordt gevonden, wordt de tekst tussen deze marker en de volgende marker (of het einde van de tekst) als het vers beschouwd.
-    3. Als geen expliciete marker wordt gevonden, wordt de tekst opgedeeld in regels (gesplitst op nieuwe regels)
-       en wordt de regel op positie (vers - 1) als fallback gebruikt.
-       
-    Deze aanpak is universeel toepasbaar, ook voor psalmen waarvan de verzen anders zijn ingedeeld (zoals de berijmde Psalm 119).
+    1. Eerst wordt gezocht naar een marker met het patroon "Vers <nummer>" of "Psalm <psalm>:<vers>".
+    2. Als een marker gevonden wordt, wordt de tekst tussen deze marker en de volgende marker gebruikt.
+    3. Anders wordt de tekst gesplitst op nieuwe regels en wordt de regel op positie (vers-1) gebruikt.
+    
+    Deze aanpak is universeel toepasbaar voor alle psalmen, mits de bron een consistente structuur hanteert.
     """
-    # Zoek naar een marker voor het gevraagde vers
-    # We maken gebruik van twee patronen: een voor "Psalm <psalm>:<vers>" en een voor "Psalm <psalm> vers <vers>"
+    # Zoek naar een marker: "Psalm <psalm>:<vers>" of "Psalm <psalm> vers <vers>"
     pattern_colon = re.compile(rf'Psalm\s*{psalm}\s*:\s*{vers}\b', re.IGNORECASE)
     pattern_vers = re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE)
-    
     m = pattern_colon.search(text) or pattern_vers.search(text)
     if m:
         start = m.end()
-        # Zoek naar de volgende marker voor een vers (wellicht voor "Vers <nummer>")
-        pattern_next = re.compile(r'Vers\s*(?:[:.]?\s*\d+)', re.IGNORECASE)
+        pattern_next = re.compile(rf'Psalm\s*{psalm}\s*(?:vers|:)\s*\d+', re.IGNORECASE)
         m_next = pattern_next.search(text, pos=start)
         end = m_next.start() if m_next else len(text)
         verse_text = text[start:end].strip()
         if verse_text:
             return verse_text
 
-    # Fallback: splits de tekst op basis van nieuwe regels
+    # Fallback: splits de tekst op nieuwe regels en gebruik de regel op positie (vers - 1)
     lines = [line.strip() for line in text.split("\n") if line.strip()]
-    # Debug: log de hoeveelheid regels (optioneel, voor debugging)
-    # print(f"Extracted {len(lines)} lines from psalm {psalm}")
     if 1 <= vers <= len(lines):
         return lines[vers - 1]
     raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
 
-def get_psalm_text_onlinebijbel(psalm: int, vers: int) -> str:
+def get_unique_psalm_url(psalm: int, vers: int) -> str:
     """
-    Haalt de volledige psalmtekst op via Online-Bijbel.nl.
-    De tekst wordt opgehaald via:
-         https://www.online-bijbel.nl/psalm/<psalm>
-    Vervolgens wordt de tekst verwerkt met strip_text() en het gevraagde vers wordt geëxtraheerd met extract_verse().
-    Deze methode is universeel toepasbaar voor alle psalmen.
+    Probeert via psalmboek.nl het unieke URL-adres op te zoeken dat naar de gevalideerde
+    versie (bijvoorbeeld met 'kernwoorden.php') leidt voor een gegeven psalm en vers.
+    De basis-URL is:
+         https://psalmboek.nl/zingen.php?psalm=<psalm>&psvID=<vers>#psvs
+    Zoeken we in de HTML naar een <a>-tag met een href waarin "kernwoorden.php" voorkomt.
+    Als deze link wordt gevonden, wordt de absolute URL teruggegeven.
     """
-    base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
+    base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(base_url)
+    soup = BeautifulSoup(html, "html.parser")
+    link = soup.find("a", href=lambda h: h and "kernwoorden.php" in h)
+    if link and link.get("href"):
+        unique_url = urljoin("https://psalmboek.nl/", link["href"])
+        return unique_url
+    # Als er geen unieke URL wordt gevonden, geef dan de standaard URL terug
+    return base_url
+
+def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
+    """
+    Haalt de volledige psalmtekst op via psalmboek.nl.
+    Eerst wordt geprobeerd om het unieke URL-adres op te zoeken dat de gevalideerde tekst bevat.
+    Vervolgens wordt de tekst van die URL verwerkt en wordt het gewenste vers geëxtraheerd.
+    """
+    unique_url = get_unique_psalm_url(psalm, vers)
+    html = cached_get(unique_url)
     full_text = strip_text(html)
     verse_text = extract_verse(full_text, psalm, vers)
     if not verse_text:
-        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden op Online-Bijbel.nl")
+        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
     return verse_text
 
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
@@ -109,7 +122,7 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
 def bible_endpoint(book: str, chapter: int, verse: int):
     """
     Endpoint voor het ophalen van een bijbeltekst uit de externe bron (Statenvertaling, Jongbloed-editie).
-    Voorbeeld: /api/bible/Genesis/1/1
+    Bijvoorbeeld: /api/bible/Genesis/1/1
     """
     text = get_bible_text(book, chapter, verse)
     return {"text": text}
@@ -118,19 +131,33 @@ def bible_endpoint(book: str, chapter: int, verse: int):
 def psalm_endpoint(
     psalm: int = Query(..., description="Het psalmnummer (1 t/m 150)"),
     vers: int = Query(..., description="Het versnummer binnen de psalm"),
-    hash: str = Query(None, description="Optioneel anker voor navigatie")
+    source: str = Query("psalmboek", description="Bron: 'psalmboek' of 'onlinebijbel'")
 ):
     """
-    Endpoint voor het ophalen van een psalmvers via Online-Bijbel.nl.
-    De volledige psalm wordt opgehaald via:
+    Endpoint voor het ophalen van een psalmvers.
+    
+    - Bij source=psalmboek wordt de tekst opgehaald via psalmboek.nl. Hierbij wordt eerst
+      het unieke URL-adres opgezocht en vervolgens de tekst uit dat adres geëxtraheerd.
+      
+    - Bij source=onlinebijbel wordt de tekst opgehaald via:
          https://www.online-bijbel.nl/psalm/<psalm>
-    Vervolgens wordt de tekst verwerkt en het gevraagde vers (op basis van herkenningspunten of regel-splitsing) geëxtraheerd.
-    Voorbeeld: /api/psalm?psalm=119&vers=3
+      en wordt daar het gevraagde vers uit gehaald.
+      
+    Bijvoorbeeld: /api/psalm?psalm=51&vers=3&source=psalmboek
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
-    text = get_psalm_text_onlinebijbel(psalm, vers)
-    return {"text": text}
+    if source.lower() == "psalmboek":
+        text = get_psalm_text_psalmboek(psalm, vers)
+    elif source.lower() == "onlinebijbel":
+        # Gebruik een alternatieve bron als dat gewenst is
+        base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
+        html = cached_get(base_url)
+        full_text = strip_text(html)
+        text = extract_verse(full_text, psalm, vers)
+    else:
+        raise HTTPException(status_code=400, detail="Onbekende bronparameter.")
+    return {"text": text, "unique_url": get_unique_psalm_url(psalm, vers) if source.lower() == "psalmboek" else None}
 
 # Voeg de API-router toe met prefix "/api"
 app.include_router(api_router, prefix="/api")
