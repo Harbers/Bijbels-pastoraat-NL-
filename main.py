@@ -22,7 +22,11 @@ api_router = APIRouter()
 # Statische outbound IP-adressen (voor whitelisting indien nodig)
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
 
-# Eenvoudige cache voor HTTP-aanvragen
+# Google Custom Search API instellingen
+# Gebruik de opgegeven API key:
+GOOGLE_API_KEY = "AIzaSyDqVjpLUM4w0H0JZL3RD0tljGVUZ71eXrs"
+GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "YOUR_GOOGLE_CSE_ID")  # Vervang "YOUR_GOOGLE_CSE_ID" indien beschikbaar
+
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -33,11 +37,26 @@ def cached_get(url: str) -> str:
         raise HTTPException(status_code=response.status_code,
                             detail=f"Fout bij ophalen van URL: {url}")
 
+def google_search(query: str) -> dict:
+    """
+    Voert een zoekopdracht uit via de Google Custom Search API.
+    Vereist een geldige GOOGLE_API_KEY en GOOGLE_CSE_ID.
+    Retourneert de JSON-respons.
+    """
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    params = {"key": GOOGLE_API_KEY, "cx": GOOGLE_CSE_ID, "q": query}
+    response = requests.get(search_url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise HTTPException(status_code=response.status_code,
+                            detail=f"Google Search fout: {response.text}")
+
 def strip_text(html_content: str) -> str:
     """
     Verwerkt de HTML-content en retourneert de tekst.
     Zoekt eerst naar een container met id "psalm-tekst" of "psalmtekst".
-    Als dat niet lukt, retourneert hij de volledige pagina-tekst.
+    Als deze niet wordt gevonden, retourneert hij de volledige pagina-tekst.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     container = soup.find("div", {"id": "psalm-tekst"}) or soup.find("div", {"id": "psalmtekst"})
@@ -49,16 +68,11 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
     """
     Extraheert het gevraagde vers uit de volledige psalmtekst.
     
-    1. We proberen te zoeken naar een marker waarin het vers wordt genoemd, bijvoorbeeld:
-       - "Psalm <psalm> : <vers>"
-       - "Psalm <psalm> vers <vers>"
-       - "Vers <vers>" (losser)
-       Hierbij accepteren we extra spaties, hoofdletters en optionele leestekens.
-    2. Als zo'n marker gevonden wordt, wordt de tekst vanaf de marker tot de volgende marker (of het einde) genomen.
-    3. Als er geen duidelijke marker wordt gevonden, splitst de functie de tekst op op nieuwe regels (met meerdere delimiters)
-       en neemt de regel op positie (vers - 1) als fallback.
+    1. We proberen te zoeken naar een marker zoals "Psalm <psalm> : <vers>", "Psalm <psalm> vers <vers>" of "Vers <vers>".
+       Hierbij accepteren we extra spaties en optionele leestekens.
+    2. Als een marker wordt gevonden, wordt de tekst vanaf die marker tot de volgende marker als het vers beschouwd.
+    3. Als geen marker wordt gevonden, splitsen we de tekst op nieuwe regels (met behulp van regex) en gebruiken we de regel op positie (vers - 1) als fallback.
     """
-    # Losser ingestelde patronen: accepteer extra spaties en optionele leestekens
     patterns = [
         re.compile(rf'Psalm\s*{psalm}\s*[:\-]\s*{vers}\b', re.IGNORECASE),
         re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE),
@@ -69,16 +83,14 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
         m = pattern.search(text)
         if m:
             start = m.end()
-            # Zoek naar de volgende marker, met een losser patroon
-            pattern_next = re.compile(rf'\bVers\s*[:\-]?\s*\d+', re.IGNORECASE)
+            pattern_next = re.compile(r'\bVers\s*[:\-]?\s*\d+', re.IGNORECASE)
             m_next = pattern_next.search(text, pos=start)
             end = m_next.start() if m_next else len(text)
             verse_text = text[start:end].strip()
             if verse_text:
                 return verse_text
 
-    # Fallback: splits de tekst op meerdere mogelijke delimiters (nieuwe regels, dubbele nieuwe regels, etc.)
-    # Gebruik regex om op een of meer newlines te splitsten
+    # Fallback: splits de tekst op nieuwe regels (één of meer newlines)
     lines = re.split(r'\n+', text.strip())
     if 1 <= vers <= len(lines):
         return lines[vers - 1].strip()
@@ -90,8 +102,8 @@ def get_unique_psalm_url(psalm: int, vers: int) -> str:
     versie (bijvoorbeeld met 'kernwoorden.php') leidt voor een gegeven psalm en vers.
     De basis-URL is:
          https://psalmboek.nl/zingen.php?psalm=<psalm>&psvID=<vers>#psvs
-    Zoeken we in de HTML naar een <a>-tag met een href waarin "kernwoorden.php" voorkomt.
-    Als deze link wordt gevonden, wordt de absolute URL teruggegeven.
+    Zoekt in de HTML naar een <a>-tag met "kernwoorden.php". Als deze gevonden wordt,
+    retourneert de absolute URL.
     """
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(base_url)
@@ -105,8 +117,8 @@ def get_unique_psalm_url(psalm: int, vers: int) -> str:
 def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
     """
     Haalt de volledige psalmtekst op via psalmboek.nl.
-    Eerst wordt geprobeerd om het unieke URL-adres op te zoeken dat de gevalideerde tekst bevat.
-    Vervolgens wordt de tekst van die URL verwerkt en wordt het gewenste vers geëxtraheerd.
+    Eerst wordt geprobeerd het unieke URL-adres op te zoeken (met 'kernwoorden.php'),
+    en vervolgens wordt de tekst van die URL verwerkt en het gewenste vers geëxtraheerd.
     """
     unique_url = get_unique_psalm_url(psalm, vers)
     html = cached_get(unique_url)
@@ -130,8 +142,8 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
 @api_router.get("/bible/{book}/{chapter}/{verse}")
 def bible_endpoint(book: str, chapter: int, verse: int):
     """
-    Endpoint voor het ophalen van een bijbeltekst uit de externe bron (Statenvertaling, Jongbloed-editie).
-    Voorbeeld: /api/bible/Genesis/1/1
+    Endpoint voor het ophalen van een bijbeltekst (Statenvertaling, Jongbloed-editie).
+    Bijvoorbeeld: /api/bible/Genesis/1/1
     """
     text = get_bible_text(book, chapter, verse)
     return {"text": text}
@@ -145,13 +157,15 @@ def psalm_endpoint(
     """
     Endpoint voor het ophalen van een psalmvers.
     
-    - Bij source=psalmboek wordt de tekst opgehaald via psalmboek.nl. Hierbij wordt eerst
-      het unieke URL-adres opgezocht en vervolgens de tekst uit dat adres geëxtraheerd.
+    - Bij source=psalmboek wordt de tekst opgehaald via psalmboek.nl, waarbij eerst
+      het unieke URL-adres wordt opgezocht en vervolgens de tekst daaruit geëxtraheerd.
       
     - Bij source=onlinebijbel wordt de tekst opgehaald via:
          https://www.online-bijbel.nl/psalm/<psalm>
       en wordt daar het gevraagde vers uit gehaald.
       
+    Tevens wordt, bij bron 'psalmboek', het unieke URL-adres in de respons meegegeven.
+    
     Bijvoorbeeld: /api/psalm?psalm=138&vers=2&source=psalmboek
     """
     if psalm < 1 or psalm > 150:
