@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Query
 import os
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote
+from urllib.parse import urljoin, quote
 
 app = FastAPI()
 
@@ -21,7 +21,8 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de bijbeltekst.")
+        raise HTTPException(status_code=response.status_code,
+                            detail="Fout bij ophalen van de bijbeltekst.")
     soup = BeautifulSoup(response.text, "html.parser")
     text_div = soup.find("div", {"id": "tekst"})
     if not text_div:
@@ -30,33 +31,43 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
 
 def get_psalm_text(psalm: int, vers: int) -> str:
     """
-    Haal de psalmtekst op via de externe bron psalmboek.nl.
-    Er wordt de URL gebruikt in het formaat:
-      https://psalmboek.nl/zingen.php?psalm=<psalmnummer>&psvID=<psalmvers>
-    De hoofdtekst van het vers wordt direct opgehaald uit de HTML.
+    Haal de psalmtekst op via psalmboek.nl. Eerst wordt de standaardpagina (zingen.php)
+    geraadpleegd, waarna er wordt gezocht naar een link naar de 'kernwoorden.php'-weergave.
+    Als deze link aanwezig is, wordt de tekst rechtstreeks daaruit gehaald (waar de kop 
+    "Psalm <psalm> vers <vers>" staat). Als er geen kernwoorden-link wordt gevonden,
+    wordt de volledige tekst van de oorspronkelijke pagina gebruikt.
+    Deze methode geldt voor alle psalmen en verzen.
     """
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}"
+    base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Probeer de container met de verstekst te vinden.
-        # Vaak staat de hoofdtekst in een <div> met id "tekst" of in een <article>.
-        text_div = soup.find("div", {"id": "tekst"})
-        if text_div:
-            return text_div.get_text(strip=True)
-        article = soup.find("article")
-        if article:
-            return article.get_text(strip=True)
-        # Als er geen specifieke container gevonden is, geef dan de volledige HTML terug.
-        return response.text
-    else:
-        raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de psalmtekst.")
+    response = requests.get(base_url, headers=headers)
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code,
+                            detail="Fout bij ophalen van de psalmtekst (zingen.php).")
+    soup = BeautifulSoup(response.text, "html.parser")
+    # Zoek naar een <a>-tag waarvan de href "kernwoorden.php" bevat
+    kernwoorden_link = soup.find("a", href=lambda h: h and "kernwoorden.php" in h)
+    if kernwoorden_link and kernwoorden_link.get("href"):
+        # Maak de URL absoluut indien nodig
+        kern_url = urljoin("https://psalmboek.nl/", kernwoorden_link["href"])
+        kern_response = requests.get(kern_url, headers=headers)
+        if kern_response.status_code == 200:
+            kern_soup = BeautifulSoup(kern_response.text, "html.parser")
+            # Probeer de tekst te vinden in een container met id "tekst"
+            text_div = kern_soup.find("div", {"id": "tekst"})
+            if text_div:
+                return text_div.get_text(strip=True)
+            else:
+                # Als geen specifieke container gevonden, geef de volledige tekst terug
+                return kern_soup.get_text(strip=True)
+    # Fallback: gebruik de tekst van de oorspronkelijke zinnen-pagina
+    return soup.get_text(strip=True)
 
 @app.get("/bible/{book}/{chapter}/{verse}")
 def bible_endpoint(book: str, chapter: int, verse: int):
     """
-    Endpoint voor het ophalen van een bijbeltekst uit de externe bron (Statenvertaling, Jongbloed-editie).
+    Endpoint voor het ophalen van een bijbeltekst uit de externe bron
+    (Statenvertaling, Jongbloed-editie).
     """
     text = get_bible_text(book, chapter, verse)
     return {"text": text}
@@ -69,11 +80,14 @@ def psalm_endpoint(
 ):
     """
     Endpoint voor het ophalen van een psalmvers.
-    De tekst wordt opgehaald via de externe bron psalmboek.nl met de URL-structuur:
-      https://psalmboek.nl/zingen.php?psalm=<psalmnummer>&psvID=<psalmvers>
+    Eerst wordt de pagina https://psalmboek.nl/zingen.php?psalm=<psalm>&psvID=<vers>
+    geraadpleegd en daarna wordt gezocht naar de link naar de 'kernwoorden.php'-weergave.
+    Als deze beschikbaar is, wordt de hoofdtekst (rechtstreeks onder de kop "Psalm <psalm>
+    vers <vers>") opgehaald en geretourneerd.
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
+    # Specifieke validatie voor Psalm 119 indien gewenst (bijv. vers 1-88)
     if psalm == 119 and (vers < 1 or vers > 88):
         raise HTTPException(status_code=400, detail="Voor Psalm 119 moet het versnummer tussen 1 en 88 liggen.")
     text = get_psalm_text(psalm, vers)
