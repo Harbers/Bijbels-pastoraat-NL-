@@ -33,7 +33,8 @@ app = FastAPI()
 def root():
     return {"status": "Bijbels Pastoraat API draait correct"}
 
-api_router = APIRouter(prefix="/api")
+# Maak de API-router zonder prefix; de prefix voegen we toe bij het includen.
+api_router = APIRouter()
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
 
@@ -87,6 +88,7 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
+                # Gebruik newline als separator om <br>-elementen om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
@@ -210,14 +212,11 @@ def psalm_endpoint(
         raise HTTPException(status_code=400, detail="Onbekende bronparameter.")
     return {"text": text, "unique_url": unique_url}
 
-# Extra testendpoint met Selenium
+# Extra testendpoint met Selenium om te controleren of de headless browser werkt
 @api_router.get("/scrape")
 def scrape_endpoint(url: str = Query(..., description="De URL die gescraped moet worden")):
-    """
-    Testendpoint om een URL via Selenium te laden en de gerenderde tekst terug te geven.
-    Dit bootst het handmatig openen van een link na.
-    """
     text = extract_text_via_selenium(url)
     return {"url": url, "text": text}
 
+# Voeg de API-router toe met de prefix "/api"
 app.include_router(api_router, prefix="/api")
