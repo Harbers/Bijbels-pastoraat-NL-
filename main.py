@@ -24,6 +24,12 @@ api_router = APIRouter(prefix="/api")
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
 
+# Voor berijmde psalmen kunt u een interne mapping instellen (voorbeeld)
+BERIJMD_VERZEN = {
+    119: 50,  # Stel dat Psalm 119 in de 1773-berijming 50 verzen heeft
+    138: 1    # Voorbeeld: Psalm 138 heeft slechts 1 vers
+}
+
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
     logger.debug(f"Ophalen URL: {url}")
@@ -34,8 +40,7 @@ def cached_get(url: str) -> str:
         return response.text
     else:
         logger.error(f"Fout bij ophalen van URL: {url} - Status: {response.status_code}")
-        raise HTTPException(status_code=response.status_code,
-                            detail=f"Fout bij ophalen van URL: {url}")
+        raise HTTPException(status_code=response.status_code, detail=f"Fout bij ophalen van URL: {url}")
 
 def strip_text(html_content: str) -> str:
     soup = BeautifulSoup(html_content, "html.parser")
@@ -46,22 +51,41 @@ def strip_text(html_content: str) -> str:
     logger.debug("Geen specifieke container gevonden, gebruik volledige pagina-tekst.")
     return soup.get_text(separator="\n", strip=True)
 
-def extract_verse(text: str, psalm: int, vers: int) -> str:
+def extract_structured_verses(html_content: str) -> dict:
     """
-    Extraheert het gevraagde vers uit de volledige psalmtekst.
-    
-    1. Probeer expliciete markers te vinden, zoals:
-       "Psalm <psalm> : <vers>", "Psalm <psalm> vers <vers>" of "Vers <vers>"
-       Hierbij worden extra spaties en optionele leestekens toegelaten.
-    2. Als een marker wordt gevonden, retourneert de functie de tekst tussen deze marker en de volgende marker.
-    3. Als geen marker wordt gevonden, wordt de tekst gesplitst op newlines en wordt de regel op positie (vers - 1) als fallback gebruikt.
+    Probeert de HTML te parsen en een mapping te bouwen van versnummers naar de bijbehorende tekst,
+    op basis van de structuur (div's met klasse "vers belijdenis_inhoud line_breaks ritmisch").
+    """
+    soup = BeautifulSoup(html_content, "html.parser")
+    verse_divs = soup.find_all("div", class_="vers belijdenis_inhoud line_breaks ritmisch")
+    verses = {}
+    if verse_divs:
+        logger.debug(f"Gevonden {len(verse_divs)} verse-divs via structuur.")
+        for div in verse_divs:
+            vers_tag = div.find("a", class_="versnummer")
+            if vers_tag:
+                try:
+                    vers_no = int(vers_tag.get_text(strip=True))
+                except ValueError:
+                    continue
+            else:
+                continue
+            p_tag = div.find("p", class_="verstekst")
+            if p_tag:
+                verse_text = p_tag.get_text(separator=" ", strip=True)
+                verses[vers_no] = verse_text
+        logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
+    return verses
+
+def extract_verse_fallback(text: str, psalm: int, vers: int) -> str:
+    """
+    Fallback-extractie zoals eerder: gebruik regex-markers en splitsen op newlines.
     """
     patterns = [
         re.compile(rf'Psalm\s*{psalm}\s*[:\-]\s*{vers}\b', re.IGNORECASE),
         re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE),
         re.compile(rf'\bVers\s*[:\-]?\s*{vers}\b', re.IGNORECASE)
     ]
-    
     for pattern in patterns:
         m = pattern.search(text)
         if m:
@@ -73,14 +97,25 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
             if verse_text:
                 logger.debug(f"Marker gevonden met patroon {pattern.pattern}: {verse_text[:60]}...")
                 return verse_text
-
     lines = re.split(r'\n+', text.strip())
     logger.debug(f"Fallback: {len(lines)} regels gevonden voor psalm {psalm}.")
     if 1 <= vers <= len(lines):
-        fallback_text = lines[vers - 1].strip()
-        logger.debug(f"Fallback-tekst voor vers {vers}: {fallback_text[:60]}...")
-        return fallback_text
+        return lines[vers - 1].strip()
     raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
+
+def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
+    """
+    Probeer eerst de gestructureerde methode te gebruiken (door de div's met versnummers).
+    Als dit een resultaat oplevert, retourneer dat; anders gebruik de fallback.
+    """
+    verses = extract_structured_verses(html_content)
+    if verses and vers in verses:
+        logger.debug(f"Vers {vers} gevonden via gestructureerde extractie.")
+        return verses[vers]
+    else:
+        logger.debug("Gestructureerde extractie mislukt, gebruik fallback-methode.")
+        text = strip_text(html_content)
+        return extract_verse_fallback(text, psalm, vers)
 
 def get_unique_psalm_url(psalm: int, vers: int) -> str:
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
@@ -95,11 +130,13 @@ def get_unique_psalm_url(psalm: int, vers: int) -> str:
     return base_url
 
 def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
+    # Controleer op een interne mapping voor berijmde psalmen
+    if psalm in BERIJMD_VERZEN and vers > BERIJMD_VERZEN[psalm]:
+        raise HTTPException(status_code=400, detail=f"Psalm {psalm} bevat in de berijmde versie slechts {BERIJMD_VERZEN[psalm]} verzen.")
     unique_url = get_unique_psalm_url(psalm, vers)
     html = cached_get(unique_url)
-    full_text = strip_text(html)
-    logger.debug(f"Volledige tekst (eerste 200 karakters): {full_text[:200]}...")
-    verse_text = extract_verse(full_text, psalm, vers)
+    # Gebruik onze gestructureerde extractie indien mogelijk
+    verse_text = extract_verse_from_html(html, psalm, vers)
     if not verse_text:
         logger.error("Geen psalmvers gevonden na extractie.")
         raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
@@ -132,8 +169,7 @@ def psalm_endpoint(
     elif source.lower() == "onlinebijbel":
         base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
         html = cached_get(base_url)
-        full_text = strip_text(html)
-        text = extract_verse(full_text, psalm, vers)
+        text = extract_verse_from_html(html, psalm, vers)
         unique_url = None
     else:
         raise HTTPException(status_code=400, detail="Onbekende bronparameter.")
