@@ -6,8 +6,20 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, quote
+from functools import lru_cache
 
 app = FastAPI()
+
+# Eenvoudige cache voor opgevraagde psalmverzen
+@lru_cache(maxsize=1024)
+def cached_get(url: str) -> str:
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.text
+    else:
+        raise HTTPException(status_code=response.status_code,
+                            detail=f"Fout bij ophalen van URL: {url}")
 
 @app.get("/")
 def root():
@@ -18,12 +30,8 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
     Haal de bijbeltekst op via een externe bron (Statenvertaling, Jongbloed-editie).
     """
     url = f"https://www.statenvertaling.net/bijbel/{quote(book)}/{chapter}/{verse}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code,
-                            detail="Fout bij ophalen van de bijbeltekst.")
-    soup = BeautifulSoup(response.text, "html.parser")
+    html = cached_get(url)
+    soup = BeautifulSoup(html, "html.parser")
     text_div = soup.find("div", {"id": "tekst"})
     if not text_div:
         raise HTTPException(status_code=404, detail="Bijbeltekst niet gevonden.")
@@ -33,30 +41,28 @@ def get_psalm_text(psalm: int, vers: int) -> str:
     """
     Haal de psalmtekst op via psalmboek.nl met de aangepaste basis-URL:
       https://psalmboek.nl/zingen.php?psalm=<psalmnummer>&psvID=<psalmvers>#psvs
-    Eerst wordt de standaardpagina geraadpleegd en daarna gezocht naar een link naar
-    de 'kernwoorden.php'-weergave. Als deze beschikbaar is, wordt de hoofdtekst (onder de
-    kop "Psalm <psalm> vers <vers>") rechtstreeks opgehaald; anders wordt de tekst van de
-    originele pagina gebruikt.
+    Eerst wordt de standaardpagina opgehaald en daarna gezocht naar een link
+    naar de 'kernwoorden.php'-weergave. Als deze beschikbaar is, wordt de
+    officiële tekst (onder de kop "Psalm <psalm> vers <vers>") opgehaald.
+    Als de link ontbreekt, gebruiken we de tekst van de oorspronkelijke pagina.
     """
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    response = requests.get(base_url, headers=headers)
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code,
-                            detail="Fout bij ophalen van de psalmtekst (zingen.php).")
-    soup = BeautifulSoup(response.text, "html.parser")
+    html = cached_get(base_url)
+    soup = BeautifulSoup(html, "html.parser")
+    
     # Zoek naar een <a>-tag met 'kernwoorden.php' in de href
     kernwoorden_link = soup.find("a", href=lambda h: h and "kernwoorden.php" in h)
     if kernwoorden_link and kernwoorden_link.get("href"):
         kern_url = urljoin("https://psalmboek.nl/", kernwoorden_link["href"])
-        kern_response = requests.get(kern_url, headers=headers)
-        if kern_response.status_code == 200:
-            kern_soup = BeautifulSoup(kern_response.text, "html.parser")
-            text_div = kern_soup.find("div", {"id": "tekst"})
-            if text_div:
-                return text_div.get_text(strip=True)
-            else:
-                return kern_soup.get_text(strip=True)
+        kern_html = cached_get(kern_url)
+        kern_soup = BeautifulSoup(kern_html, "html.parser")
+        # Probeer de container te vinden waarin de letterlijke tekst staat (bijvoorbeeld met id "tekst")
+        text_div = kern_soup.find("div", {"id": "tekst"})
+        if text_div:
+            return text_div.get_text(strip=True)
+        else:
+            return kern_soup.get_text(strip=True)
+    
     # Fallback: gebruik de tekst van de oorspronkelijke pagina
     return soup.get_text(strip=True)
 
@@ -79,8 +85,9 @@ def psalm_endpoint(
     Endpoint voor het ophalen van een psalmvers.
     De tekst wordt opgehaald via de aangepaste basis-URL:
       https://psalmboek.nl/zingen.php?psalm=<psalmnummer>&psvID=<psalmvers>#psvs
-    en vervolgens, indien beschikbaar, wordt gezocht naar de link naar de 'kernwoorden.php'-weergave
-    om de hoofdtekst (rechtstreeks onder de kop "Psalm <psalm> vers <vers>") te retourneren.
+    Vervolgens wordt er gezocht naar de link naar de 'kernwoorden.php'-weergave om
+    de officiële, letterlijke tekst (onder de kop "Psalm <psalm> vers <vers>") te retourneren.
+    Indien deze link niet beschikbaar is, wordt de tekst van de oorspronkelijke pagina gebruikt.
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
