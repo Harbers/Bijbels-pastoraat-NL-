@@ -69,3 +69,8 @@ def psalm_endpoint(
 def serve_ai_plugin():
     bestandspad = os.path.join(os.path.dirname(__file__), ".well-known", "ai-plugin.json")
     return FileResponse(bestandspad, media_type="application/json")
+
+@app.get("/openapi.yaml", include_in_schema=False)
+def serve_openapi():
+    bestandspad = os.path.join(os.path.dirname(__file__), "openapi.yaml")
+    return FileResponse(bestandspad, media_type="application/yaml")
