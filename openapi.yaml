@@ -3,6 +3,10 @@ info:
   title: Backend GPT API
   version: "1.0"
   description: API voor het ophalen van bijbelteksten (Statenvertaling, Jongbloed-editie) en psalmen (berijming 1773).
+
+servers:
+  - url: https://bijbels-pastoraat-nl.onrender.com
+  
 paths:
   /bible/{book}/{chapter}/{verse}:
     get:
