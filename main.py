@@ -33,7 +33,7 @@ app = FastAPI()
 def root():
     return {"status": "Bijbels Pastoraat API draait correct"}
 
-# Maak de API-router zonder vooraf ingestelde prefix; we voegen deze toe met prefix later.
+# Maak de API-router zonder vooraf ingestelde prefix; we voegen deze later toe.
 api_router = APIRouter()
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
@@ -88,6 +88,7 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
+                # Gebruik newline als separator om <br>-elementen om te zetten
                 verse_text = p_tag.get_text(separator="\n", strip=True)
                 verses[vers_no] = verse_text
         logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
@@ -111,11 +112,12 @@ def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
     if verses and vers in verses:
         extracted = verses[vers].strip()
         logger.debug(f"Gestructureerde extractie succesvol voor vers {vers}: {extracted[:60]}...")
-        # Als de output te kort is of onverwacht ("zingen"), ga naar fallback
-        if len(extracted) < 10 or extracted.lower() == "zingen":
-            logger.debug("Extractie geeft te korte tekst, overschakelen naar fallback.")
-            text = strip_text(html_content)
-            return extract_verse_fallback(text, psalm, vers)
+        # Als de output te kort is of onverwacht (bijv. "psalmen" of "zingen"), schakelen we over op fallback.
+        if len(extracted) < 10 or extracted.strip().lower() in ["psalmen", "zingen"]:
+            logger.debug(f"Extractie geeft onvolledige tekst ('{extracted}'), overschakelen naar fallback.")
+            full_text = strip_text(html_content)
+            logger.debug("Volledige tekst snippet: " + full_text[:500])
+            return extract_verse_fallback(full_text, psalm, vers)
         return extracted
     else:
         logger.debug("Gestructureerde extractie mislukt, gebruik fallback-methode.")
@@ -161,14 +163,21 @@ def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
     # Gebruik direct de basis-URL voor de "zingen.php" pagina
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(base_url)
+    logger.debug("HTML snippet: " + html[:500])
     try:
         verse_text = extract_verse_from_html(html, psalm, vers)
     except HTTPException:
         logger.debug("Reguliere extractie mislukt, probeer Selenium fallback.")
         verse_text = extract_text_via_selenium(base_url)
-    if not verse_text or verse_text.strip().lower() == "zingen":
-        logger.error("Geen bruikbare psalmtekst gevonden na extractie.")
-        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
+    if not verse_text or verse_text.strip().lower() in ["psalmen", "zingen"]:
+        logger.debug(f"Extractie geeft onvolledige tekst ('{verse_text}'), overschakelen naar alternatieve fallback.")
+        full_text = strip_text(html)
+        logger.debug("Volledige tekst snippet: " + full_text[:500])
+        try:
+            verse_text = extract_verse_fallback(full_text, psalm, vers)
+        except Exception as e:
+            logger.error("Alternatieve fallback mislukt: " + str(e))
+            raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
     return verse_text
 
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
