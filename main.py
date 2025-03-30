@@ -24,7 +24,7 @@ api_router = APIRouter(prefix="/api")
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
 
-# Voor berijmde psalmen (voorbeeld)
+# Interne mapping voor berijmde psalmen (voorbeeld)
 BERIJMD_VERZEN = {
     119: 50,
     138: 1
@@ -33,7 +33,14 @@ BERIJMD_VERZEN = {
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
     logger.debug(f"Ophalen URL: {url}")
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # Extra headers om een echte browser na te bootsen
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive"
+    }
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         logger.debug(f"URL succesvol opgehaald: {url}")
@@ -53,8 +60,8 @@ def strip_text(html_content: str) -> str:
 
 def extract_structured_verses(html_content: str) -> dict:
     """
-    Probeert de HTML te parsen en een mapping te bouwen van versnummers naar tekst, 
-    gebaseerd op de div's met de klasse 'vers belijdenis_inhoud line_breaks ritmisch'.
+    Bouwt een mapping op van versnummers naar tekst, gebaseerd op div's met de klasse
+    'vers belijdenis_inhoud line_breaks ritmisch'.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     verse_divs = soup.find_all("div", class_="vers belijdenis_inhoud line_breaks ritmisch")
@@ -72,29 +79,27 @@ def extract_structured_verses(html_content: str) -> dict:
                 continue
             p_tag = div.find("p", class_="verstekst")
             if p_tag:
-                text = p_tag.get_text(separator=" ", strip=True)
-                verses[vers_no] = text
+                verse_text = p_tag.get_text(separator=" ", strip=True)
+                verses[vers_no] = verse_text
+        logger.debug(f"Extracted verses via structuur: {list(verses.keys())}")
     return verses
 
 def extract_verse_fallback(text: str, psalm: int, vers: int) -> str:
     """
-    Fallback-extractie: eerst splitsen op newlines; als dat onvoldoende regels geeft, 
-    probeer dan te splitsen op <br>-elementen door de HTML opnieuw te parsen.
+    Fallback-extractie: splits eerst op newlines; indien onvoldoende, splits op <br>-elementen.
     """
     lines = re.split(r'\n+', text.strip())
     logger.debug(f"Fallback 1 (newline-splitsing): {len(lines)} regels gevonden.")
     if len(lines) >= vers:
         return lines[vers - 1].strip()
-    
-    # Tweede fallback: parse opnieuw en splits op <br>
+    # Tweede fallback: gebruik BeautifulSoup om <br>-tags te verwerken
     soup = BeautifulSoup(text, "html.parser")
     br_text = soup.get_text(separator="\n", strip=True)
     br_lines = br_text.split("\n")
     logger.debug(f"Fallback 2 (<br>-splitsing): {len(br_lines)} regels gevonden.")
     if len(br_lines) >= vers:
         return br_lines[vers - 1].strip()
-    
-    raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend in fallback.")
+    raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
 
 def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
     verses = extract_structured_verses(html_content)
