@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote
 from functools import lru_cache
+import re
 
 app = FastAPI()
 
@@ -24,14 +25,60 @@ def cached_get(url: str) -> str:
 def strip_text(html_content: str) -> str:
     """
     Verwerk de HTML-content en retourneer de 'gestript' tekst.
-    Probeer eerst een container met een bekende id of class (bijv. "tekst" of "psalm-tekst") te vinden.
+    Eerst wordt gezocht naar een container met id 'psalm-tekst' (of een vergelijkbare id).
+    Als deze container niet wordt gevonden, wordt de volledige pagina-tekst gebruikt.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     container = soup.find("div", {"id": "psalm-tekst"})
     if container:
-        return container.get_text(strip=True)
-    # Fallback: geef de volledige tekst terug
-    return soup.get_text(strip=True)
+        return container.get_text(separator="\n", strip=True)
+    # Fallback: retourneer de gehele pagina-tekst
+    return soup.get_text(separator="\n", strip=True)
+
+def extract_verse(text: str, psalm: int, vers: int) -> str:
+    """
+    Probeer eerst de tekst te splitsen op herkenningspunten (bijvoorbeeld headers met 'Psalm <psalm> vers <nummer>')
+    en gebruik deze als anker om de juiste grens te bepalen.
+    Als dat niet lukt, splits dan op nieuwe regels en neem de regel die overeenkomt met het versnummer.
+    """
+    # Zoek naar een patroon: "Psalm <psalm> vers <nummer>"
+    pattern = re.compile(rf'Psalm\s*{psalm}\s*vers\s*(\d+)', re.IGNORECASE)
+    matches = list(pattern.finditer(text))
+    if matches:
+        # Als markers aanwezig zijn, bepaal dan de begin- en eindindex van het gewenste vers.
+        verses_found = {}
+        for i, m in enumerate(matches):
+            try:
+                verse_num = int(m.group(1))
+                # Bepaal de startindex van dit vers
+                start = m.end()
+                # De eindindex is de start van de volgende marker, of het einde van de tekst.
+                end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+                verses_found[verse_num] = text[start:end].strip()
+            except (IndexError, ValueError):
+                continue
+        if vers in verses_found and verses_found[vers]:
+            return verses_found[vers]
+    # Fallback: splits op nieuwe regels en neem de corresponderende regel
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    if 1 <= vers <= len(lines):
+        return lines[vers - 1]
+    raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
+
+def get_psalm_text_liturgie(psalm: int, vers: int) -> str:
+    """
+    Haal de volledige psalmtekst op via liturgie.nu en extraheer het gewenste vers.
+    We gaan ervan uit dat de psalm op de URL:
+       https://www.liturgie.nu/psalmen/<psalmnummer>
+    staat en dat de tekst in een container met id 'psalm-tekst' staat.
+    """
+    base_url = f"https://www.liturgie.nu/psalmen/{psalm}"
+    html = cached_get(base_url)
+    full_text = strip_text(html)
+    verse_text = extract_verse(full_text, psalm, vers)
+    if not verse_text:
+        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden.")
+    return verse_text
 
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
     """
@@ -44,33 +91,9 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
         raise HTTPException(status_code=404, detail="Bijbeltekst niet gevonden.")
     return text
 
-def get_psalm_text_liturgie(psalm: int, vers: int) -> str:
-    """
-    Haal de psalmtekst op via liturgie.nu.
-    We gaan ervan uit dat de gehele psalm op de pagina staat via:
-       https://www.liturgie.nu/psalmen/<psalmnummer>
-    De tekst wordt uit een container met id "psalm-tekst" gelezen (indien aanwezig).
-    Vervolgens splitsen we de tekst in regels, waarbij elke regel een vers voorstelt.
-    Het gevraagde vers (op basis van het versnummer) wordt geretourneerd.
-    """
-    base_url = f"https://www.liturgie.nu/psalmen/{psalm}"
-    html = cached_get(base_url)
-    soup = BeautifulSoup(html, "html.parser")
-    container = soup.find("div", {"id": "psalm-tekst"})
-    if not container:
-        raise HTTPException(status_code=404, detail="Psalmtekst niet gevonden op liturgie.nu")
-    # Haal de volledige tekst op en splits op nieuwe regels
-    full_text = container.get_text(separator="\n", strip=True)
-    verses = [line.strip() for line in full_text.split("\n") if line.strip()]
-    if not verses:
-        raise HTTPException(status_code=404, detail="Geen verzen gevonden in de psalmtekst")
-    if vers < 1 or vers > len(verses):
-        raise HTTPException(status_code=400, detail="Ongeldig versnummer")
-    return verses[vers - 1]
-
 def get_psalm_text(psalm: int, vers: int) -> str:
     """
-    Haal de psalmtekst op. In deze versie gebruiken we liturgie.nu als primaire bron.
+    Universele methode voor het ophalen van een psalmvers via liturgie.nu.
     """
     return get_psalm_text_liturgie(psalm, vers)
 
@@ -85,15 +108,15 @@ def bible_endpoint(book: str, chapter: int, verse: int):
 
 @app.get("/psalm")
 def psalm_endpoint(
-    psalm: int = Query(..., description="Het psalmnummer (bijv. 120)"),
-    vers: int = Query(..., description="Het versnummer binnen de psalm (bijv. 2)"),
+    psalm: int = Query(..., description="Het psalmnummer (1 t/m 150)"),
+    vers: int = Query(..., description="Het versnummer binnen de psalm"),
     hash: str = Query(None, description="Optioneel anker voor navigatie")
 ):
     """
-    Endpoint voor het ophalen van een psalmvers.
-    De tekst wordt opgehaald via liturgie.nu op de pagina:
+    Endpoint voor het ophalen van een psalmvers via liturgie.nu.
+    De psalmtekst wordt opgehaald via:
        https://www.liturgie.nu/psalmen/<psalmnummer>
-    en vervolgens wordt het gevraagde vers (op basis van het versnummer) uit de gesplitste tekst geretourneerd.
+    en vervolgens wordt het gevraagde vers (op basis van het versnummer) geëxtraheerd.
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
