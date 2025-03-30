@@ -36,8 +36,8 @@ def cached_get(url: str) -> str:
 def strip_text(html_content: str) -> str:
     """
     Verwerkt de HTML-content en retourneert de tekst.
-    Probeert eerst een container met id "psalm-tekst" of "psalmtekst" te vinden.
-    Als deze niet wordt gevonden, retourneert hij de volledige pagina-tekst.
+    Zoekt eerst naar een container met id "psalm-tekst" of "psalmtekst".
+    Als dat niet lukt, retourneert hij de volledige pagina-tekst.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     container = soup.find("div", {"id": "psalm-tekst"}) or soup.find("div", {"id": "psalmtekst"})
@@ -49,29 +49,39 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
     """
     Extraheert het gevraagde vers uit de volledige psalmtekst.
     
-    1. Eerst wordt gezocht naar een marker met het patroon "Vers <nummer>" of "Psalm <psalm>:<vers>".
-    2. Als een marker gevonden wordt, wordt de tekst tussen deze marker en de volgende marker gebruikt.
-    3. Anders wordt de tekst gesplitst op nieuwe regels en wordt de regel op positie (vers-1) gebruikt.
-    
-    Deze aanpak is universeel toepasbaar voor alle psalmen, mits de bron een consistente structuur hanteert.
+    1. We proberen te zoeken naar een marker waarin het vers wordt genoemd, bijvoorbeeld:
+       - "Psalm <psalm> : <vers>"
+       - "Psalm <psalm> vers <vers>"
+       - "Vers <vers>" (losser)
+       Hierbij accepteren we extra spaties, hoofdletters en optionele leestekens.
+    2. Als zo'n marker gevonden wordt, wordt de tekst vanaf de marker tot de volgende marker (of het einde) genomen.
+    3. Als er geen duidelijke marker wordt gevonden, splitst de functie de tekst op op nieuwe regels (met meerdere delimiters)
+       en neemt de regel op positie (vers - 1) als fallback.
     """
-    # Zoek naar een marker: "Psalm <psalm>:<vers>" of "Psalm <psalm> vers <vers>"
-    pattern_colon = re.compile(rf'Psalm\s*{psalm}\s*:\s*{vers}\b', re.IGNORECASE)
-    pattern_vers = re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE)
-    m = pattern_colon.search(text) or pattern_vers.search(text)
-    if m:
-        start = m.end()
-        pattern_next = re.compile(rf'Psalm\s*{psalm}\s*(?:vers|:)\s*\d+', re.IGNORECASE)
-        m_next = pattern_next.search(text, pos=start)
-        end = m_next.start() if m_next else len(text)
-        verse_text = text[start:end].strip()
-        if verse_text:
-            return verse_text
+    # Losser ingestelde patronen: accepteer extra spaties en optionele leestekens
+    patterns = [
+        re.compile(rf'Psalm\s*{psalm}\s*[:\-]\s*{vers}\b', re.IGNORECASE),
+        re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE),
+        re.compile(rf'\bVers\s*[:\-]?\s*{vers}\b', re.IGNORECASE)
+    ]
+    
+    for pattern in patterns:
+        m = pattern.search(text)
+        if m:
+            start = m.end()
+            # Zoek naar de volgende marker, met een losser patroon
+            pattern_next = re.compile(rf'\bVers\s*[:\-]?\s*\d+', re.IGNORECASE)
+            m_next = pattern_next.search(text, pos=start)
+            end = m_next.start() if m_next else len(text)
+            verse_text = text[start:end].strip()
+            if verse_text:
+                return verse_text
 
-    # Fallback: splits de tekst op nieuwe regels en gebruik de regel op positie (vers - 1)
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    # Fallback: splits de tekst op meerdere mogelijke delimiters (nieuwe regels, dubbele nieuwe regels, etc.)
+    # Gebruik regex om op een of meer newlines te splitsten
+    lines = re.split(r'\n+', text.strip())
     if 1 <= vers <= len(lines):
-        return lines[vers - 1]
+        return lines[vers - 1].strip()
     raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
 
 def get_unique_psalm_url(psalm: int, vers: int) -> str:
@@ -90,7 +100,6 @@ def get_unique_psalm_url(psalm: int, vers: int) -> str:
     if link and link.get("href"):
         unique_url = urljoin("https://psalmboek.nl/", link["href"])
         return unique_url
-    # Als er geen unieke URL wordt gevonden, geef dan de standaard URL terug
     return base_url
 
 def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
@@ -122,7 +131,7 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
 def bible_endpoint(book: str, chapter: int, verse: int):
     """
     Endpoint voor het ophalen van een bijbeltekst uit de externe bron (Statenvertaling, Jongbloed-editie).
-    Bijvoorbeeld: /api/bible/Genesis/1/1
+    Voorbeeld: /api/bible/Genesis/1/1
     """
     text = get_bible_text(book, chapter, verse)
     return {"text": text}
@@ -143,21 +152,22 @@ def psalm_endpoint(
          https://www.online-bijbel.nl/psalm/<psalm>
       en wordt daar het gevraagde vers uit gehaald.
       
-    Bijvoorbeeld: /api/psalm?psalm=51&vers=3&source=psalmboek
+    Bijvoorbeeld: /api/psalm?psalm=138&vers=2&source=psalmboek
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
     if source.lower() == "psalmboek":
         text = get_psalm_text_psalmboek(psalm, vers)
+        unique_url = get_unique_psalm_url(psalm, vers)
     elif source.lower() == "onlinebijbel":
-        # Gebruik een alternatieve bron als dat gewenst is
         base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
         html = cached_get(base_url)
         full_text = strip_text(html)
         text = extract_verse(full_text, psalm, vers)
+        unique_url = None
     else:
         raise HTTPException(status_code=400, detail="Onbekende bronparameter.")
-    return {"text": text, "unique_url": get_unique_psalm_url(psalm, vers) if source.lower() == "psalmboek" else None}
+    return {"text": text, "unique_url": unique_url}
 
 # Voeg de API-router toe met prefix "/api"
 app.include_router(api_router, prefix="/api")
