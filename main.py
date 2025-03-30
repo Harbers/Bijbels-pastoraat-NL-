@@ -25,24 +25,53 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
         raise HTTPException(status_code=404, detail="Bijbeltekst niet gevonden.")
     return text_div.get_text(strip=True)
 
-def get_psalm_text(psalm: int, vers: int) -> str:
-    # Gebruik de bron van de liturgie voor psalmen
-    url = f"https://www.liturgie.nu/psalmen/{psalm}/{vers}"
+def get_psalm_text_fallback(psalm: int, vers: int) -> str:
+    """
+    Haal de gehele psalm op via de fallback-bron en extraheer het gewenste vers.
+    """
+    url = f"https://www.bijbelbox.nl/psalmen/psalm-{psalm}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de psalmtekst.")
+        raise HTTPException(status_code=response.status_code, 
+                            detail="Fout bij ophalen van de psalmtekst (fallback bron).")
     soup = BeautifulSoup(response.text, "html.parser")
     # Probeer een element met id "psalmtekst" te vinden; zo niet, gebruik de gehele bodytekst.
     text_div = soup.find("div", {"id": "psalmtekst"})
     if text_div:
-        text = text_div.get_text(separator="\n", strip=True)
+        text_full = text_div.get_text(separator="\n", strip=True)
     else:
-        text = soup.get_text(separator="\n", strip=True)
-    # Normaliseer de whitespace per regel, maar behoud de nieuwe lijnen
-    lines = [re.sub(r'\s+', ' ', line) for line in text.splitlines()]
-    normalized_text = "\n".join(lines)
-    return normalized_text
+        text_full = soup.get_text(separator="\n", strip=True)
+    # Splits de volledige tekst in regels (aangenomen dat elke regel een vers vertegenwoordigt)
+    verses = [line.strip() for line in text_full.splitlines() if line.strip() != ""]
+    if vers < 1 or vers > len(verses):
+        raise HTTPException(status_code=400, detail=f"Versnummer {vers} is ongeldig. Deze psalm heeft {len(verses)} verzen.")
+    return verses[vers-1]
+
+def get_psalm_text(psalm: int, vers: int) -> str:
+    """
+    Probeer eerst de psalmtekst op te halen via liturgie.nu.
+    Als dit mislukt, wordt de fallback-bron (bijbelbox.nl) gebruikt.
+    """
+    url_primary = f"https://www.liturgie.nu/psalmen/{psalm}/{vers}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url_primary, headers=headers)
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, "html.parser")
+        text_div = soup.find("div", {"id": "psalmtekst"})
+        if text_div:
+            text = text_div.get_text(separator="\n", strip=True)
+        else:
+            text = soup.get_text(separator="\n", strip=True)
+        lines = [re.sub(r'\s+', ' ', line) for line in text.splitlines()]
+        normalized_text = "\n".join(lines)
+        # Indien de verkregen tekst leeg blijkt of geen zinvolle inhoud heeft, activeren we de fallback
+        if not normalized_text.strip():
+            return get_psalm_text_fallback(psalm, vers)
+        return normalized_text
+    else:
+        # Als de primaire bron niet reageert, wordt de fallback gebruikt.
+        return get_psalm_text_fallback(psalm, vers)
 
 @app.get("/bible/{book}/{chapter}/{verse}")
 def bible_endpoint(book: str, chapter: int, verse: int):
@@ -60,9 +89,10 @@ def psalm_endpoint(
     hash: str = Query(None, description="Optioneel anker voor navigatie")
 ):
     """
-    Haal een psalmvers op uit de liturgiebron.
-    Voor de berijmde psalmen geldt bijvoorbeeld dat Psalm 119 slechts 88 verzen heeft.
+    Haal een psalmvers op.
+    Voor de berijmde psalmen geldt dat bijvoorbeeld Psalm 119 slechts 88 verzen heeft.
     De tekst wordt 100% letterlijk geciteerd.
+    Indien de primaire bron (liturgie.nu) faalt, wordt de fallback-bron (bijbelbox.nl) gebruikt.
     """
     # Validatie van het psalmnummer
     if psalm < 1 or psalm > 150:
@@ -71,7 +101,6 @@ def psalm_endpoint(
     if psalm == 119:
         if vers < 1 or vers > 88:
             raise HTTPException(status_code=400, detail="Voor Psalm 119 moet het versnummer tussen 1 en 88 liggen.")
-    # Indien gewenst, kunt u hier extra validatie toevoegen voor andere psalmen
     text = get_psalm_text(psalm, vers)
     return {"text": text}
 
