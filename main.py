@@ -33,7 +33,7 @@ def get_psalm_text(psalm: int, vers: int) -> str:
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de psalmtekst.")
     soup = BeautifulSoup(response.text, "html.parser")
-    # Probeer een element met id "psalmtekst" te vinden; als dit niet lukt, gebruik de gehele bodytekst.
+    # Probeer een element met id "psalmtekst" te vinden; zo niet, gebruik de gehele bodytekst.
     text_div = soup.find("div", {"id": "psalmtekst"})
     if text_div:
         text = text_div.get_text(separator="\n", strip=True)
@@ -55,14 +55,23 @@ def bible_endpoint(book: str, chapter: int, verse: int):
 
 @app.get("/psalm")
 def psalm_endpoint(
-    psalm: int = Query(..., description="Het psalmnummer"),
+    psalm: int = Query(..., description="Het psalmnummer (1 t/m 150)"),
     vers: int = Query(..., description="Het versnummer binnen de psalm"),
     hash: str = Query(None, description="Optioneel anker voor navigatie")
 ):
     """
-    Haal een psalmvers op uit de liturgie bron.
+    Haal een psalmvers op uit de liturgiebron.
+    Voor de berijmde psalmen geldt bijvoorbeeld dat Psalm 119 slechts 88 verzen heeft.
     De tekst wordt 100% letterlijk geciteerd.
     """
+    # Validatie van het psalmnummer
+    if psalm < 1 or psalm > 150:
+        raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
+    # Specifieke validatie voor Psalm 119
+    if psalm == 119:
+        if vers < 1 or vers > 88:
+            raise HTTPException(status_code=400, detail="Voor Psalm 119 moet het versnummer tussen 1 en 88 liggen.")
+    # Indien gewenst, kunt u hier extra validatie toevoegen voor andere psalmen
     text = get_psalm_text(psalm, vers)
     return {"text": text}
 
