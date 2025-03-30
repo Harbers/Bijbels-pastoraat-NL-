@@ -1,0 +1,12 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl keep-alive ping
+        run: curl -s https://bijbels-pastoraat-nl.onrender.com > /dev/null
