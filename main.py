@@ -29,7 +29,7 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
 
 def get_psalm_text_fallback(psalm: int, vers: int) -> str:
     """
-    Haal de psalmtekst op via een fallback-bron (bijbelbox.nl) en geef het gewenste vers terug.
+    Haal de psalmtekst op via de fallback-bron (bijbelbox.nl) en geef het gewenste vers terug.
     """
     url = f"https://www.bijbelbox.nl/psalmen/psalm-{psalm}"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -51,9 +51,10 @@ def get_psalm_text_fallback(psalm: int, vers: int) -> str:
 def get_psalm_text(psalm: int, vers: int) -> str:
     """
     Probeer eerst de psalmtekst op te halen via de primaire externe bron (liturgie.nu).
-    Bij falen wordt de fallback-bron (bijbelbox.nl) gebruikt.
+    Indien dit mislukt, wordt de fallback-bron (bijbelbox.nl) gebruikt.
+    De URL-structuur is aangepast naar queryparameters.
     """
-    url_primary = f"https://www.liturgie.nu/psalmen/{psalm}/{vers}"
+    url_primary = f"https://www.liturgie.nu/psalmen?psalmnummer={psalm}&vers={vers}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url_primary, headers=headers)
     if response.status_code == 200:
@@ -63,7 +64,6 @@ def get_psalm_text(psalm: int, vers: int) -> str:
             text = text_div.get_text(separator="\n", strip=True)
         else:
             text = soup.get_text(separator="\n", strip=True)
-        # Normaliseer de tekst
         lines = [re.sub(r'\s+', ' ', line) for line in text.splitlines()]
         normalized_text = "\n".join(lines)
         if not normalized_text.strip():
