@@ -11,15 +11,15 @@ import re
 
 app = FastAPI()
 
-# Root-route voor de hoofd-URL
+# Root-route voor statuscontrole
 @app.get("/")
 def root():
     return {"status": "Bijbels Pastoraat API draait correct"}
 
-# Maak een APIRouter met prefix "/api"
+# Maak een API-router met prefix "/api"
 api_router = APIRouter()
 
-# Eenvoudige cache voor opgevraagde content
+# Eenvoudige cache voor HTTP-aanvragen
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -32,61 +32,60 @@ def cached_get(url: str) -> str:
 
 def strip_text(html_content: str) -> str:
     """
-    Verwerk de HTML-content en retourneer de tekst.
-    Probeert eerst een container met id "psalm-tekst" te vinden.
-    Als dat niet lukt, wordt de volledige pagina-tekst gebruikt.
+    Verwerkt de HTML-content en retourneert de tekst.
+    We zoeken naar een container met een herkenbare id of class.
+    Als geen container wordt gevonden, wordt de volledige paginatekst gebruikt.
     """
     soup = BeautifulSoup(html_content, "html.parser")
-    container = soup.find("div", {"id": "psalm-tekst"})
+    # We proberen eerst een container te vinden met id "content" of "psalmtekst"
+    container = soup.find("div", {"id": "content"}) or soup.find("div", {"id": "psalmtekst"})
     if container:
         return container.get_text(separator="\n", strip=True)
     return soup.get_text(separator="\n", strip=True)
 
 def extract_verse(text: str, psalm: int, vers: int) -> str:
     """
-    Probeert de gewenste psalmregel te extraheren.
+    Probeert het gevraagde vers te extraheren.
     
-    1. Eerst zoeken we naar een header waarin "Psalm <psalm> vers <vers>" of "Psalm <psalm>:<vers>" voorkomt.
-    2. Als dat lukt, nemen we de tekst vanaf de header tot de volgende header als het vers.
-    3. Als geen duidelijke marker gevonden wordt, splitsen we de tekst op nieuwe regels en nemen we de regel die overeenkomt met het versnummer.
+    1. Zoekt naar een header of markering met het patroon "Vers <nummer>".
+    2. Als er een match wordt gevonden, gebruikt het de tekst tussen deze marker en de volgende.
+    3. Als geen duidelijke marker wordt gevonden, wordt de tekst opgedeeld in regels en wordt de regel op positie (vers-1) teruggegeven.
     """
-    # Zoek naar een header met het patroon "Psalm <psalm> vers <vers>" of "Psalm <psalm>:<vers>"
-    pattern = re.compile(rf'Psalm\s*{psalm}\s*(?:vers|:)\s*{vers}', re.IGNORECASE)
+    # Zoek naar een marker zoals "Vers <nummer>" (bijv. "Vers 2" voor vers 2)
+    pattern = re.compile(rf'Vers\s*{vers}\b', re.IGNORECASE)
     m = pattern.search(text)
     if m:
         start = m.end()
-        # Zoek naar de volgende header voor hetzelfde psalm (bijv. "Psalm <psalm> vers <n>")
-        pattern_next = re.compile(rf'Psalm\s*{psalm}\s*(?:vers|:)\s*\d+', re.IGNORECASE)
+        # Zoek naar de volgende "Vers" marker
+        pattern_next = re.compile(rf'Vers\s+\d+', re.IGNORECASE)
         m_next = pattern_next.search(text, pos=start)
         end = m_next.start() if m_next else len(text)
         verse_text = text[start:end].strip()
         if verse_text:
             return verse_text
-
     # Fallback: splits de tekst op nieuwe regels en neem de regel op positie (vers-1)
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     if 1 <= vers <= len(lines):
         return lines[vers - 1]
     raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
 
-def get_psalm_text_liturgie(psalm: int, vers: int) -> str:
+def get_psalm_text_onlinebijbel(psalm: int, vers: int) -> str:
     """
-    Haal de volledige psalmtekst op via liturgie.nu en extraheer het gevraagde vers.
-    We gaan ervan uit dat de psalm beschikbaar is op:
-         https://www.liturgie.nu/psalmen/<psalm>
-    en dat de tekst in een container met id "psalm-tekst" staat.
+    Haalt de volledige psalmtekst op via Online-Bijbel.nl/psalm/<psalm>.
+    Vervolgens wordt de tekst doorzocht op herkenningspunten (zoals "Vers <nummer>")
+    om het gevraagde vers te extraheren.
     """
-    base_url = f"https://www.liturgie.nu/psalmen/{psalm}"
+    base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
     html = cached_get(base_url)
     full_text = strip_text(html)
     verse_text = extract_verse(full_text, psalm, vers)
     if not verse_text:
-        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden.")
+        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden op Online-Bijbel.nl")
     return verse_text
 
 def get_bible_text(book: str, chapter: int, verse: int) -> str:
     """
-    Haal de bijbeltekst op via een externe bron (Statenvertaling, Jongbloed-editie).
+    Haalt de bijbeltekst op via een externe bron (Statenvertaling, Jongbloed-editie).
     """
     url = f"https://www.statenvertaling.net/bijbel/{quote(book)}/{chapter}/{verse}"
     html = cached_get(url)
@@ -111,16 +110,15 @@ def psalm_endpoint(
     hash: str = Query(None, description="Optioneel anker voor navigatie")
 ):
     """
-    Endpoint voor het ophalen van een psalmvers via liturgie.nu.
+    Endpoint voor het ophalen van een psalmvers via Online-Bijbel.nl.
     De volledige psalm wordt opgehaald via:
-         https://www.liturgie.nu/psalmen/<psalm>
-    De tekst wordt vervolgens gesplitst op basis van herkenningspunten of nieuwe regels,
-    zodat het gevraagde vers (op basis van het versnummer) kan worden teruggegeven.
+         https://www.online-bijbel.nl/psalm/<psalm>
+    en vervolgens wordt het gevraagde vers (op basis van herkenningspunten of nieuwe regels) geëxtraheerd.
     Voorbeeld: /api/psalm?psalm=128&vers=1
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
-    text = get_psalm_text_liturgie(psalm, vers)
+    text = get_psalm_text_onlinebijbel(psalm, vers)
     return {"text": text}
 
 # Voeg de API-router toe met prefix /api
