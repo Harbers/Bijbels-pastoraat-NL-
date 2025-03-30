@@ -20,29 +20,29 @@ def get_bible_text(book: str, chapter: int, verse: int) -> str:
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de bijbeltekst.")
     soup = BeautifulSoup(response.text, "html.parser")
-    # Pas dit element aan indien nodig, afhankelijk van de HTML-structuur van de bron
     text_div = soup.find("div", {"id": "tekst"})
     if not text_div:
         raise HTTPException(status_code=404, detail="Bijbeltekst niet gevonden.")
-    # Zorg dat de tekst 100% letterlijk wordt geciteerd
     return text_div.get_text(strip=True)
 
-def get_psalm_text(psalm: int, psvID: int) -> str:
-    # Gebruik de bron van de 1773 berijming voor psalmen en gezangen
-    url = f"https://psalmboek.nl/psalmen.php?psalm={psalm}&psvID={psvID}"
+def get_psalm_text(psalm: int, vers: int) -> str:
+    # Gebruik de bron van de liturgie voor psalmen
+    url = f"https://www.liturgie.nu/psalmen/{psalm}/{vers}"
     headers = {"User-Agent": "Mozilla/5.0"}
     response = requests.get(url, headers=headers)
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail="Fout bij ophalen van de psalmtekst.")
     soup = BeautifulSoup(response.text, "html.parser")
-    # Aangenomen wordt dat de tekst zich bevindt in een element met id "psvs"
-    div = soup.find("div", {"id": "psvs"})
-    if not div:
-        raise HTTPException(status_code=404, detail="Psalmtekst niet gevonden.")
-    text = div.get_text(separator="\n", strip=True)
-    # Normaliseer de whitespace zonder de originele structuur te verliezen
-    text = re.sub(r'\s+', ' ', text)
-    return text
+    # Probeer een element met id "psalmtekst" te vinden; als dit niet lukt, gebruik de gehele bodytekst.
+    text_div = soup.find("div", {"id": "psalmtekst"})
+    if text_div:
+        text = text_div.get_text(separator="\n", strip=True)
+    else:
+        text = soup.get_text(separator="\n", strip=True)
+    # Normaliseer de whitespace per regel, maar behoud de nieuwe lijnen
+    lines = [re.sub(r'\s+', ' ', line) for line in text.splitlines()]
+    normalized_text = "\n".join(lines)
+    return normalized_text
 
 @app.get("/bible/{book}/{chapter}/{verse}")
 def bible_endpoint(book: str, chapter: int, verse: int):
@@ -56,15 +56,16 @@ def bible_endpoint(book: str, chapter: int, verse: int):
 @app.get("/psalm")
 def psalm_endpoint(
     psalm: int = Query(..., description="Het psalmnummer"),
-    psvID: int = Query(..., description="Het versnummer binnen de psalm"),
+    vers: int = Query(..., description="Het versnummer binnen de psalm"),
     hash: str = Query(None, description="Optioneel anker voor navigatie")
 ):
     """
-    Haal een psalmvers op uit de berijming van 1773.
+    Haal een psalmvers op uit de liturgie bron.
     De tekst wordt 100% letterlijk geciteerd.
     """
-    text = get_psalm_text(psalm, psvID)
+    text = get_psalm_text(psalm, vers)
     return {"text": text}
+
 @app.get("/.well-known/ai-plugin.json", include_in_schema=False)
 def serve_ai_plugin():
     bestandspad = os.path.join(os.path.dirname(__file__), ".well-known", "ai-plugin.json")
