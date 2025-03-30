@@ -33,7 +33,7 @@ app = FastAPI()
 def root():
     return {"status": "Bijbels Pastoraat API draait correct"}
 
-# Maak de API-router zonder prefix; de prefix voegen we toe bij het includen.
+# Maak de API-router zonder vooraf ingestelde prefix; we voegen deze later toe.
 api_router = APIRouter()
 
 STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
@@ -141,6 +141,7 @@ def extract_text_via_selenium(url: str) -> str:
     try:
         logger.debug(f"Selenium: Laden van URL: {url}")
         driver.get(url)
+        # Wacht tot het element met id 'belijdenis_item' zichtbaar is (max 10 seconden)
         wait = WebDriverWait(driver, 10)
         element = wait.until(EC.visibility_of_element_located(("id", "belijdenis_item")))
         text = element.get_attribute("innerText")
@@ -152,28 +153,15 @@ def extract_text_via_selenium(url: str) -> str:
     finally:
         driver.quit()
 
-def get_unique_psalm_url(psalm: int, vers: int) -> str:
+def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
+    # Gebruik direct de basis-URL voor de "zingen.php" pagina
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(base_url)
-    soup = BeautifulSoup(html, "html.parser")
-    link = soup.find("a", href=lambda h: h and "kernwoorden.php" in h)
-    if link and link.get("href"):
-        unique_url = urljoin("https://psalmboek.nl/", link["href"])
-        logger.debug(f"Uniek URL gevonden: {unique_url}")
-        return unique_url
-    logger.debug("Geen uniek URL gevonden, standaard URL gebruiken.")
-    return base_url
-
-def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
-    if psalm in BERIJMD_VERZEN and vers > BERIJMD_VERZEN[psalm]:
-        raise HTTPException(status_code=400, detail=f"Psalm {psalm} bevat in de berijmde versie slechts {BERIJMD_VERZEN[psalm]} verzen.")
-    unique_url = get_unique_psalm_url(psalm, vers)
-    html = cached_get(unique_url)
     try:
         verse_text = extract_verse_from_html(html, psalm, vers)
     except HTTPException:
         logger.debug("Reguliere extractie mislukt, probeer Selenium fallback.")
-        verse_text = extract_text_via_selenium(unique_url)
+        verse_text = extract_text_via_selenium(base_url)
     if not verse_text:
         logger.error("Geen psalmvers gevonden na extractie.")
         raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
@@ -202,7 +190,7 @@ def psalm_endpoint(
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
     if source.lower() == "psalmboek":
         text = get_psalm_text_psalmboek(psalm, vers)
-        unique_url = get_unique_psalm_url(psalm, vers)
+        unique_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     elif source.lower() == "onlinebijbel":
         base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
         html = cached_get(base_url)
