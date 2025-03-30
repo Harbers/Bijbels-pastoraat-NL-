@@ -5,10 +5,19 @@ import os
 import re
 import requests
 import logging
+import time
 from fastapi import FastAPI, APIRouter, HTTPException, Query
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urljoin
 from functools import lru_cache
+
+# Probeer Selenium te importeren; als dit niet lukt, geeft dat een duidelijke fout.
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+except ImportError:
+    raise ImportError("Selenium is niet geïnstalleerd. Installeer het met: pip install selenium")
 
 # Configureer logging op debug-niveau
 logging.basicConfig(level=logging.DEBUG)
@@ -33,7 +42,6 @@ BERIJMD_VERZEN = {
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
     logger.debug(f"Ophalen URL: {url}")
-    # Extra headers om een echte browser na te bootsen
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -59,10 +67,6 @@ def strip_text(html_content: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 def extract_structured_verses(html_content: str) -> dict:
-    """
-    Bouwt een mapping op van versnummers naar tekst, gebaseerd op div's met de klasse
-    'vers belijdenis_inhoud line_breaks ritmisch'.
-    """
     soup = BeautifulSoup(html_content, "html.parser")
     verse_divs = soup.find_all("div", class_="vers belijdenis_inhoud line_breaks ritmisch")
     verses = {}
@@ -85,21 +89,18 @@ def extract_structured_verses(html_content: str) -> dict:
     return verses
 
 def extract_verse_fallback(text: str, psalm: int, vers: int) -> str:
-    """
-    Fallback-extractie: splits eerst op newlines; indien onvoldoende, splits op <br>-elementen.
-    """
     lines = re.split(r'\n+', text.strip())
     logger.debug(f"Fallback 1 (newline-splitsing): {len(lines)} regels gevonden.")
     if len(lines) >= vers:
         return lines[vers - 1].strip()
-    # Tweede fallback: gebruik BeautifulSoup om <br>-tags te verwerken
+    # Tweede fallback: gebruik <br>-splitsing
     soup = BeautifulSoup(text, "html.parser")
     br_text = soup.get_text(separator="\n", strip=True)
     br_lines = br_text.split("\n")
     logger.debug(f"Fallback 2 (<br>-splitsing): {len(br_lines)} regels gevonden.")
     if len(br_lines) >= vers:
         return br_lines[vers - 1].strip()
-    raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
+    raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend in fallback.")
 
 def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
     verses = extract_structured_verses(html_content)
@@ -109,7 +110,43 @@ def extract_verse_from_html(html_content: str, psalm: int, vers: int) -> str:
     else:
         logger.debug("Gestructureerde extractie mislukt, gebruik fallback-methode.")
         text = strip_text(html_content)
-        return extract_verse_fallback(text, psalm, vers)
+        try:
+            return extract_verse_fallback(text, psalm, vers)
+        except HTTPException:
+            # Als fallback mislukt, probeer de tekst via Selenium te halen.
+            logger.debug("Fallback via reguliere methoden mislukt, probeer Selenium.")
+            return extract_text_via_selenium(url)
+
+def extract_text_via_selenium(url: str) -> str:
+    """
+    Laadt de pagina via een headless browser (Selenium) en retourneert de innerText van het hoofdcontent-element.
+    Deze methode bootst de handmatige beleving van een browser na.
+    """
+    options = Options()
+    options.headless = True
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    try:
+        driver = webdriver.Chrome(options=options)
+    except Exception as e:
+        logger.error("Selenium WebDriver kon niet worden gestart: " + str(e))
+        raise HTTPException(status_code=500, detail="Selenium WebDriver niet beschikbaar.")
+    try:
+        logger.debug(f"Selenium: Laden van URL: {url}")
+        driver.get(url)
+        # Wacht even tot de pagina volledig is geladen (pas aan indien nodig)
+        time.sleep(3)
+        # Probeer het hoofdcontent-element te vinden. Hier gebruiken we als voorbeeld het element met id 'belijdenis_item'.
+        try:
+            element = driver.find_element(By.ID, "belijdenis_item")
+            text = element.get_attribute("innerText")
+        except Exception:
+            text = driver.page_source
+        logger.debug("Selenium: Tekst succesvol geëxtraheerd.")
+        return text
+    finally:
+        driver.quit()
 
 def get_unique_psalm_url(psalm: int, vers: int) -> str:
     base_url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
@@ -128,7 +165,11 @@ def get_psalm_text_psalmboek(psalm: int, vers: int) -> str:
         raise HTTPException(status_code=400, detail=f"Psalm {psalm} bevat in de berijmde versie slechts {BERIJMD_VERZEN[psalm]} verzen.")
     unique_url = get_unique_psalm_url(psalm, vers)
     html = cached_get(unique_url)
-    verse_text = extract_verse_from_html(html, psalm, vers)
+    try:
+        verse_text = extract_verse_from_html(html, psalm, vers)
+    except HTTPException as e:
+        logger.debug("Extractie met reguliere methoden mislukt, Selenium fallback wordt ingezet.")
+        verse_text = extract_text_via_selenium(unique_url)
     if not verse_text:
         logger.error("Geen psalmvers gevonden na extractie.")
         raise HTTPException(status_code=404, detail="Psalmvers niet gevonden via psalmboek.nl")
