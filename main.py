@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+import os
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -63,3 +65,7 @@ def psalm_endpoint(
     """
     text = get_psalm_text(psalm, psvID)
     return {"text": text}
+@app.get("/.well-known/ai-plugin.json", include_in_schema=False)
+def serve_ai_plugin():
+    bestandspad = os.path.join(os.path.dirname(__file__), ".well-known", "ai-plugin.json")
+    return FileResponse(bestandspad, media_type="application/json")
