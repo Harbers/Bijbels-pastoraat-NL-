@@ -11,17 +11,6 @@ import re
 
 app = FastAPI()
 
-# --------------------------------------------------------------------
-# STATIC OUTBOUND IP ADDRESSES
-# Network requests from this service to the public internet will come from one of these IP addresses:
-#  - 18.156.158.53
-#  - 18.156.42.200
-#  - 52.59.103.54
-# Deze IP-adressen kunnen gebruikt worden voor het instellen van whitelists of firewall-regels
-# bij externe API's en bronnen.
-# --------------------------------------------------------------------
-STATIC_OUTBOUND_IPS = ["18.156.158.53", "18.156.42.200", "52.59.103.54"]
-
 # Root-route voor statuscontrole
 @app.get("/")
 def root():
@@ -45,7 +34,7 @@ def strip_text(html_content: str) -> str:
     """
     Verwerk de HTML-content en retourneer de tekst.
     Probeert eerst een container met id "psalm-tekst" of "psalmtekst" te vinden.
-    Als deze niet wordt gevonden, wordt de gehele tekst van de pagina gebruikt.
+    Als deze niet wordt gevonden, retourneert hij de volledige pagina-tekst.
     """
     soup = BeautifulSoup(html_content, "html.parser")
     container = soup.find("div", {"id": "psalm-tekst"}) or soup.find("div", {"id": "psalmtekst"})
@@ -57,27 +46,34 @@ def extract_verse(text: str, psalm: int, vers: int) -> str:
     """
     Extraheert het gevraagde vers uit de volledige psalmtekst.
     
-    1. Eerst wordt gezocht naar een marker met het patroon "Vers <nummer>" (bijv. "Vers 3").
-       Als die marker wordt gevonden, wordt de tekst tussen deze marker en de volgende marker als het vers beschouwd.
-    2. Als geen duidelijke marker wordt gevonden, wordt de tekst opgedeeld in regels (gesplitst op nieuwe regels)
-       en wordt de regel op positie (vers - 1) teruggegeven.
+    1. We proberen eerst expliciet te zoeken naar een marker waarin de header "Psalm <psalm>" 
+       gevolgd door een aanduiding van het vers (bijvoorbeeld "Psalm 119:3" of "Psalm 119 vers 3") voorkomt.
+    2. Als een dergelijke marker wordt gevonden, wordt de tekst tussen deze marker en de volgende marker (of het einde van de tekst) als het vers beschouwd.
+    3. Als geen expliciete marker wordt gevonden, wordt de tekst opgedeeld in regels (gesplitst op nieuwe regels)
+       en wordt de regel op positie (vers - 1) als fallback gebruikt.
        
-    Deze aanpak is universeel toepasbaar voor alle psalmen, mits de bron een consistente structuur hanteert.
+    Deze aanpak is universeel toepasbaar, ook voor psalmen waarvan de verzen anders zijn ingedeeld (zoals de berijmde Psalm 119).
     """
-    # Zoek naar een marker met het patroon "Vers <nummer>" (optioneel met een punt of dubbele punt)
-    pattern = re.compile(rf'Vers\s*[:.]?\s*{vers}\b', re.IGNORECASE)
-    m = pattern.search(text)
+    # Zoek naar een marker voor het gevraagde vers
+    # We maken gebruik van twee patronen: een voor "Psalm <psalm>:<vers>" en een voor "Psalm <psalm> vers <vers>"
+    pattern_colon = re.compile(rf'Psalm\s*{psalm}\s*:\s*{vers}\b', re.IGNORECASE)
+    pattern_vers = re.compile(rf'Psalm\s*{psalm}\s*vers\s*{vers}\b', re.IGNORECASE)
+    
+    m = pattern_colon.search(text) or pattern_vers.search(text)
     if m:
         start = m.end()
-        # Zoek naar de volgende marker (bijv. "Vers 4") als die bestaat
-        pattern_next = re.compile(rf'Vers\s*[:.]?\s*\d+', re.IGNORECASE)
+        # Zoek naar de volgende marker voor een vers (wellicht voor "Vers <nummer>")
+        pattern_next = re.compile(r'Vers\s*(?:[:.]?\s*\d+)', re.IGNORECASE)
         m_next = pattern_next.search(text, pos=start)
         end = m_next.start() if m_next else len(text)
         verse_text = text[start:end].strip()
         if verse_text:
             return verse_text
-    # Fallback: splits de tekst op nieuwe regels en neem de regel op positie (vers - 1)
+
+    # Fallback: splits de tekst op basis van nieuwe regels
     lines = [line.strip() for line in text.split("\n") if line.strip()]
+    # Debug: log de hoeveelheid regels (optioneel, voor debugging)
+    # print(f"Extracted {len(lines)} lines from psalm {psalm}")
     if 1 <= vers <= len(lines):
         return lines[vers - 1]
     raise HTTPException(status_code=400, detail="Ongeldig versnummer of tekststructuur niet herkend.")
@@ -87,7 +83,7 @@ def get_psalm_text_onlinebijbel(psalm: int, vers: int) -> str:
     Haalt de volledige psalmtekst op via Online-Bijbel.nl.
     De tekst wordt opgehaald via:
          https://www.online-bijbel.nl/psalm/<psalm>
-    en vervolgens wordt het gevraagde vers geëxtraheerd met behulp van de functie extract_verse.
+    Vervolgens wordt de tekst verwerkt met strip_text() en het gevraagde vers wordt geëxtraheerd met extract_verse().
     Deze methode is universeel toepasbaar voor alle psalmen.
     """
     base_url = f"https://www.online-bijbel.nl/psalm/{psalm}"
@@ -128,8 +124,8 @@ def psalm_endpoint(
     Endpoint voor het ophalen van een psalmvers via Online-Bijbel.nl.
     De volledige psalm wordt opgehaald via:
          https://www.online-bijbel.nl/psalm/<psalm>
-    en vervolgens wordt het gevraagde vers (op basis van herkenningspunten of regel-splitsing) geëxtraheerd.
-    Voorbeeld: /api/psalm?psalm=128&vers=1
+    Vervolgens wordt de tekst verwerkt en het gevraagde vers (op basis van herkenningspunten of regel-splitsing) geëxtraheerd.
+    Voorbeeld: /api/psalm?psalm=119&vers=3
     """
     if psalm < 1 or psalm > 150:
         raise HTTPException(status_code=400, detail="Ongeldig psalmnummer. Een psalmnummer moet tussen 1 en 150 liggen.")
