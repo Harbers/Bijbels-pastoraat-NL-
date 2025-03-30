@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: Backend GPT API
+  title: "Backend API voor Bijbelteksten en Psalmen"
   version: "1.0"
-  description: API voor het ophalen van bijbelteksten (Statenvertaling, Jongbloed-editie) en psalmen (berijming 1773).
+  description: "API voor het ophalen van bijbelteksten (Statenvertaling, Jongbloed-editie) en psalmen via externe bronnen."
 
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
@@ -10,7 +10,7 @@ servers:
 paths:
   /bible/{book}/{chapter}/{verse}:
     get:
-      summary: Haal een bijbeltekst op
+      summary: "Haal een bijbeltekst op"
       operationId: get_bible_text
       parameters:
         - name: book
@@ -18,22 +18,22 @@ paths:
           required: true
           schema:
             type: string
-          description: Naam van het bijbelboek.
+          description: "Naam van het bijbelboek."
         - name: chapter
           in: path
           required: true
           schema:
             type: integer
-          description: Het hoofdstuknummer.
+          description: "Het hoofdstuknummer."
         - name: verse
           in: path
           required: true
           schema:
             type: integer
-          description: Het versnummer.
+          description: "Het versnummer."
       responses:
         '200':
-          description: De bijbeltekst
+          description: "De opgehaalde bijbeltekst"
           content:
             application/json:
               schema:
@@ -44,7 +44,7 @@ paths:
 
   /psalm:
     get:
-      summary: Haal een psalmvers op
+      summary: "Haal een psalmvers op"
       operationId: get_psalm_text
       parameters:
         - name: psalm
@@ -52,22 +52,22 @@ paths:
           required: true
           schema:
             type: integer
-          description: Het psalmnummer.
+          description: "Het psalmnummer."
         - name: psvID
           in: query
           required: true
           schema:
             type: integer
-          description: Het versnummer.
+          description: "Het versnummer binnen de psalm."
         - name: hash
           in: query
           required: false
           schema:
             type: string
-          description: Anker
+          description: "Optioneel anker."
       responses:
         '200':
-          description: De psalmtekst
+          description: "De opgehaalde psalmtekst"
           content:
             application/json:
               schema:
