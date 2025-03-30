@@ -53,7 +53,7 @@ paths:
           schema:
             type: integer
           description: "Het psalmnummer."
-        - name: psvID
+        - name: vers
           in: query
           required: true
           schema:
