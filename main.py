@@ -27,23 +27,19 @@ def get_max_berijmd_vers(psalm: int) -> int:
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    vers_nummers = set()
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if f"psalm={psalm}" in href and "psvID=" in href:
-            try:
-                vers_id = href.split("psvID=")[1].split("&")[0].split("#")[0]
-                nummer = int(vers_id)
-                vers_nummers.add(nummer)
-            except (IndexError, ValueError):
-                continue
+    vers_elementen = soup.select("div.verzen a")
+    vers_nummers = {
+        int(el.get_text(strip=True))
+        for el in vers_elementen if el.get_text(strip=True).isdigit()
+    }
 
     if not vers_nummers:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"✅ Psalm {psalm} heeft {hoogste} verzen.")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} berijmde verzen.")
     return hoogste
+
 
 def validate_berijmd_vers(psalm: int, vers: int):
     max_vers = get_max_berijmd_vers(psalm)
