@@ -43,7 +43,7 @@ def get_max_berijmd_vers(psalm: int) -> int:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens links met ?psID=")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens analyse van href's.")
     return hoogste
 
 def validate_berijmd_vers(psalm: int, vers: int):
@@ -51,7 +51,7 @@ def validate_berijmd_vers(psalm: int, vers: int):
     if vers < 1 or vers > max_vers:
         raise HTTPException(
             status_code=400,
-            detail=f"Psalm {psalm}:{vers} bestaat niet in de berijmde versie. Hoogste vers is {max_vers}."
+            detail=f"Psalm {psalm}:{vers} bestaat niet. Hoogste vers is {max_vers}."
         )
 
 def extract_vers_psalmboek(psalm: int, vers: int) -> str:
@@ -63,31 +63,17 @@ def extract_vers_psalmboek(psalm: int, vers: int) -> str:
         return tekstblok.get_text("\n", strip=True)
     raise HTTPException(status_code=404, detail="Vers niet gevonden bij psalmboek.nl")
 
-def extract_vers_onlinebijbel(psalm: int, vers: int) -> str:
-    url = f"https://www.online-bijbel.nl/psalm/{psalm}"
-    html = cached_get(url)
-    soup = BeautifulSoup(html, "html.parser")
-    regels = [r.strip() for r in soup.get_text("\n").split("\n") if r.strip()]
-    if vers <= len(regels):
-        return regels[vers - 1]
-    raise HTTPException(status_code=404, detail="Vers niet gevonden bij online-bijbel.nl")
-
 @api_router.get("/psalm")
 def psalm_endpoint(
     psalm: int = Query(..., ge=1, le=150),
-    vers: int = Query(..., ge=1),
-    bron: str = Query("psalmboek", description="Bron: psalmboek of onlinebijbel")
+    vers: int = Query(..., ge=1)
 ):
     validate_berijmd_vers(psalm, vers)
-
-    if bron == "psalmboek":
-        tekst = extract_vers_psalmboek(psalm, vers)
-    elif bron == "onlinebijbel":
-        tekst = extract_vers_onlinebijbel(psalm, vers)
-    else:
-        raise HTTPException(status_code=400, detail="Ongeldige bronoptie")
-
-    return {"psalm": psalm, "vers": vers, "tekst": tekst}
+    return {
+        "psalm": psalm,
+        "vers": vers,
+        "tekst": extract_vers_psalmboek(psalm, vers)
+    }
 
 @api_router.get("/psalm/max")
 def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
