@@ -27,19 +27,24 @@ def get_max_berijmd_vers(psalm: int) -> int:
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    psvs_div = soup.find("div", id="psvs")
-    if not psvs_div:
-        raise HTTPException(status_code=404, detail=f"Kon verzencontainer niet vinden voor Psalm {psalm}.")
+    links = soup.select('a.psletter[href^="?psID="]')
+    vers_nummers = set()
 
-    # Tel het aantal h3 elementen onder id="psvs"
-    versregels = psvs_div.find_all("h3")
-    if not versregels:
+    for link in links:
+        href = link.get("href", "")
+        if "#psvs" in href and "?psID=" in href:
+            try:
+                nummer = int(href.split("?psID=")[1].split("#")[0])
+                vers_nummers.add(nummer)
+            except ValueError:
+                continue
+
+    if not vers_nummers:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
-    hoogste = len(versregels)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen op basis van <h3> in #psvs.")
+    hoogste = max(vers_nummers)
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens links met ?psID=")
     return hoogste
-
 
 def validate_berijmd_vers(psalm: int, vers: int):
     max_vers = get_max_berijmd_vers(psalm)
