@@ -1,5 +1,3 @@
-# main.py – Uitgebreid met endpoint voor maximaal vers per psalm
-
 import requests
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, APIRouter, HTTPException, Query
@@ -25,14 +23,10 @@ def cached_get(url: str) -> str:
 
 @lru_cache(maxsize=150)
 def get_max_berijmd_vers(psalm: int) -> int:
-    """
-    Bepaal het aantal verzen in de berijmde versie van een psalm via visuele scraping van psalmboek.nl
-    """
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
-
-    vers_elementen = soup.select("div.versen a") or soup.select(".inhoud-verslijst a")
+    vers_elementen = soup.select(".tekst select option")
     vers_nummers = set()
 
     for el in vers_elementen:
@@ -44,7 +38,7 @@ def get_max_berijmd_vers(psalm: int) -> int:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens visuele detectie.")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens analyse.")
     return hoogste
 
 def validate_berijmd_vers(psalm: int, vers: int):
@@ -52,7 +46,7 @@ def validate_berijmd_vers(psalm: int, vers: int):
     if vers < 1 or vers > max_vers:
         raise HTTPException(
             status_code=400,
-            detail=f"Er is geprobeerd om Psalm {psalm}:{vers} (berijmd, 1773) op te halen, maar dit vers blijkt niet te bestaan. Het hoogste beschikbare versnummer voor Psalm {psalm} is {max_vers}."
+            detail=f"Psalm {psalm}:{vers} bestaat niet. Hoogste vers is {max_vers}."
         )
 
 def extract_vers_psalmboek(psalm: int, vers: int) -> str:
@@ -64,56 +58,28 @@ def extract_vers_psalmboek(psalm: int, vers: int) -> str:
         return tekstblok.get_text("\n", strip=True)
     raise HTTPException(status_code=404, detail="Vers niet gevonden bij psalmboek.nl")
 
-def extract_vers_onlinebijbel(psalm: int, vers: int) -> str:
-    url = f"https://www.online-bijbel.nl/psalm/{psalm}"
-    html = cached_get(url)
-    soup = BeautifulSoup(html, "html.parser")
-    regels = [r.strip() for r in soup.get_text("\n").split("\n") if r.strip()]
-    if vers <= len(regels):
-        return regels[vers - 1]
-    raise HTTPException(status_code=404, detail="Vers niet gevonden bij online-bijbel.nl")
-
-def fallback_vers(psalm: int, vers: int) -> str:
-    bronnen = [extract_vers_psalmboek, extract_vers_onlinebijbel]
-    resultaten = []
-    for f in bronnen:
-        try:
-            tekst = f(psalm, vers)
-            if tekst:
-                resultaten.append(tekst.strip())
-        except:
-            continue
-    uniek = list(set(resultaten))
-    if len(uniek) == 1:
-        return uniek[0]
-    elif len(uniek) > 1:
-        return "\n\n".join(uniek)
-    raise HTTPException(status_code=502, detail="Geen betrouwbare fallbacktekst beschikbaar")
-
 @api_router.get("/psalm")
 def psalm_endpoint(
     psalm: int = Query(..., ge=1, le=150),
-    vers: int = Query(..., ge=1),
-    bron: str = Query("psalmboek", description="Bron: psalmboek of onlinebijbel")
+    vers: int = Query(..., ge=1)
 ):
     validate_berijmd_vers(psalm, vers)
-
-    if bron == "psalmboek":
-        try:
-            tekst = extract_vers_psalmboek(psalm, vers)
-        except:
-            tekst = fallback_vers(psalm, vers)
-    elif bron == "onlinebijbel":
-        tekst = extract_vers_onlinebijbel(psalm, vers)
-    else:
-        raise HTTPException(status_code=400, detail="Ongeldige bronoptie")
-
-    return {"psalm": psalm, "vers": vers, "tekst": tekst}
+    return {
+        "psalm": psalm,
+        "vers": vers,
+        "tekst": extract_vers_psalmboek(psalm, vers)
+    }
 
 @api_router.get("/psalm/max")
 def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
     max_vers = get_max_berijmd_vers(psalm)
     return {"psalm": psalm, "max_vers": max_vers}
+
+# 🔍 Debug HTML output
+@app.get("/debug/html")
+def debug_html(psalm: int):
+    html = cached_get(f"https://psalmboek.nl/zingen.php?psalm={psalm}")
+    return {"html": html[:5000]}
 
 @app.get("/")
 def root():
