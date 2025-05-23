@@ -26,9 +26,9 @@ def get_max_berijmd_vers(psalm: int) -> int:
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
-    
-    # De versnummers staan in elementen met class 'psletter'
-    vers_links = soup.select("a.psletter")
+
+    # Alleen a-tags met href beginnend op '?psID='
+    vers_links = soup.select("a[href^='?psID=']")
     vers_nummers = set()
 
     for el in vers_links:
@@ -40,7 +40,7 @@ def get_max_berijmd_vers(psalm: int) -> int:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen (gevonden via .psletter).")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen (correct uit hrefs '?psID=').")
     return hoogste
 
 def validate_berijmd_vers(psalm: int, vers: int):
