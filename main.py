@@ -1,4 +1,4 @@
-# main.py – Volledig herschreven met visuele versdetectie voor Psalmboek.nl
+# main.py – Uitgebreid met endpoint voor maximaal vers per psalm
 
 import requests
 from bs4 import BeautifulSoup
@@ -32,7 +32,6 @@ def get_max_berijmd_vers(psalm: int) -> int:
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    # Zoek naar visuele versnummers in het raster rechts (klasse verslijst of "Verzen")
     vers_elementen = soup.select("div.versen a") or soup.select(".inhoud-verslijst a")
     vers_nummers = set()
 
@@ -110,6 +109,11 @@ def psalm_endpoint(
         raise HTTPException(status_code=400, detail="Ongeldige bronoptie")
 
     return {"psalm": psalm, "vers": vers, "tekst": tekst}
+
+@api_router.get("/psalm/max")
+def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
+    max_vers = get_max_berijmd_vers(psalm)
+    return {"psalm": psalm, "max_vers": max_vers}
 
 @app.get("/")
 def root():
