@@ -10,6 +10,7 @@ logger = logging.getLogger("psalm_api")
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+
 @lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
     headers = {
@@ -21,6 +22,7 @@ def cached_get(url: str) -> str:
         return response.text
     raise HTTPException(status_code=response.status_code, detail=f"Fout bij ophalen van URL: {url}")
 
+
 @lru_cache(maxsize=150)
 def get_max_berijmd_vers(psalm: int) -> int:
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=1#psvs"
@@ -29,19 +31,18 @@ def get_max_berijmd_vers(psalm: int) -> int:
 
     opmaak_div = soup.find("div", id="opmaakkolom1")
     if not opmaak_div:
-        raise HTTPException(status_code=404, detail="Structuur van pagina niet gevonden.")
+        raise HTTPException(status_code=404, detail=f"Structuur niet gevonden voor Psalm {psalm}.")
 
-    links = opmaak_div.select('a.psletter[href*="?psID="]')
+    vers_links = opmaak_div.select("a.psletter[href*='?psID=']")
     vers_nummers = set()
 
-    for link in links:
-        href = link.get("href", "")
-        if "?psID=" in href:
-            try:
-                nummer = int(href.split("?psID=")[1].split("#")[0])
-                vers_nummers.add(nummer)
-            except ValueError:
-                continue
+    for link in vers_links:
+        try:
+            href = link.get("href", "")
+            nummer = int(href.split("?psID=")[1].split("#")[0])
+            vers_nummers.add(nummer)
+        except Exception:
+            continue
 
     if not vers_nummers:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
@@ -59,6 +60,7 @@ def validate_berijmd_vers(psalm: int, vers: int):
             detail=f"Psalm {psalm}:{vers} bestaat niet. Hoogste vers is {max_vers}."
         )
 
+
 def extract_vers_psalmboek(psalm: int, vers: int) -> str:
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(url)
@@ -67,6 +69,7 @@ def extract_vers_psalmboek(psalm: int, vers: int) -> str:
     if tekstblok:
         return tekstblok.get_text("\n", strip=True)
     raise HTTPException(status_code=404, detail="Vers niet gevonden bij psalmboek.nl")
+
 
 @api_router.get("/psalm")
 def psalm_endpoint(
@@ -80,18 +83,22 @@ def psalm_endpoint(
         "tekst": extract_vers_psalmboek(psalm, vers)
     }
 
+
 @api_router.get("/psalm/max")
 def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
     max_vers = get_max_berijmd_vers(psalm)
     return {"psalm": psalm, "max_vers": max_vers}
 
+
 @app.get("/debug/html")
 def debug_html(psalm: int):
-    html = cached_get(f"https://psalmboek.nl/zingen.php?psalm={psalm}")
+    html = cached_get(f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=1#psvs")
     return {"html": html[:5000]}
+
 
 @app.get("/")
 def root():
     return {"status": "Psalm API actief"}
+
 
 app.include_router(api_router)
