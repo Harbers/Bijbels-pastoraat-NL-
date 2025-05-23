@@ -80,6 +80,15 @@ def debug_html(psalm: int):
     html = cached_get(f"https://psalmboek.nl/zingen.php?psalm={psalm}")
     return {"html": html[:5000]}
 
+@app.get("/debug/versen")
+def debug_versen(psalm: int):
+    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
+    html = cached_get(url)
+    soup = BeautifulSoup(html, "html.parser")
+    vers_elementen = soup.select("#opmaakkolom1 a.psletter")
+    versnummers = [el.get_text(strip=True) for el in vers_elementen]
+    return {"gevonden_versen": versnummers}
+
 @app.get("/")
 def root():
     return {"status": "Psalm API actief"}
