@@ -1,4 +1,4 @@
-# main.py – Volledige herimplementatie met robuuste versdetectie via visuele elementen
+# main.py – Volledig herschreven met visuele versdetectie voor Psalmboek.nl
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,39 +26,26 @@ def cached_get(url: str) -> str:
 @lru_cache(maxsize=150)
 def get_max_berijmd_vers(psalm: int) -> int:
     """
-    Detecteer het aantal verzen van een psalm via visuele elementen op psalmboek.nl
+    Bepaal het aantal verzen in de berijmde versie van een psalm via visuele scraping van psalmboek.nl
     """
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    vers_links = soup.select(".versen a") or soup.select(".inhoud-verslijst a")
+    # Zoek naar visuele versnummers in het raster rechts (klasse verslijst of "Verzen")
+    vers_elementen = soup.select("div.versen a") or soup.select(".inhoud-verslijst a")
     vers_nummers = set()
 
-    for link in vers_links:
-        try:
-            tekst = link.text.strip()
-            nummer = int(tekst)
-            vers_nummers.add(nummer)
-        except:
-            continue
+    for el in vers_elementen:
+        tekst = el.get_text(strip=True)
+        if tekst.isdigit():
+            vers_nummers.add(int(tekst))
 
     if not vers_nummers:
-        # Fallback naar kopregels
-        tekstregels = soup.get_text("\n").split("\n")
-        for regel in tekstregels:
-            if f"Psalm {psalm} vers" in regel:
-                try:
-                    nummer = int(regel.strip().split("vers")[-1].strip())
-                    vers_nummers.add(nummer)
-                except:
-                    continue
-
-    if not vers_nummers:
-        raise HTTPException(status_code=404, detail=f"Kon het aantal verzen van Psalm {psalm} niet bepalen.")
+        raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen (gedetecteerd via visuele elementen).")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens visuele detectie.")
     return hoogste
 
 def validate_berijmd_vers(psalm: int, vers: int):
@@ -66,7 +53,7 @@ def validate_berijmd_vers(psalm: int, vers: int):
     if vers < 1 or vers > max_vers:
         raise HTTPException(
             status_code=400,
-            detail=f"Er is geprobeerd om Psalm {psalm}:{vers} (berijmd, 1773) op te halen, maar dit vers bestaat niet. Hoogste vers is {max_vers}."
+            detail=f"Er is geprobeerd om Psalm {psalm}:{vers} (berijmd, 1773) op te halen, maar dit vers blijkt niet te bestaan. Het hoogste beschikbare versnummer voor Psalm {psalm} is {max_vers}."
         )
 
 def extract_vers_psalmboek(psalm: int, vers: int) -> str:
