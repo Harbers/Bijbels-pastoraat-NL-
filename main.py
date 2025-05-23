@@ -26,27 +26,27 @@ def get_max_berijmd_vers(psalm: int) -> int:
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
+    vers_elementen = soup.select("#koppsalmen ~ a.psletter")
+    vers_nummers = set()
 
-    vers_elementen = soup.select("div.verzen a")
-    vers_nummers = {
-        int(el.get_text(strip=True))
-        for el in vers_elementen if el.get_text(strip=True).isdigit()
-    }
+    for el in vers_elementen:
+        tekst = el.get_text(strip=True)
+        if tekst.isdigit():
+            vers_nummers.add(int(tekst))
 
     if not vers_nummers:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} berijmde verzen.")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens analyse.")
     return hoogste
-
 
 def validate_berijmd_vers(psalm: int, vers: int):
     max_vers = get_max_berijmd_vers(psalm)
     if vers < 1 or vers > max_vers:
         raise HTTPException(
             status_code=400,
-            detail=f"Psalm {psalm}:{vers} bestaat niet. Hoogste vers is {max_vers}."
+            detail=f"Psalm {psalm}:{vers} bestaat niet in de berijmde versie. Hoogste vers is {max_vers}."
         )
 
 def extract_vers_psalmboek(psalm: int, vers: int) -> str:
@@ -58,17 +58,31 @@ def extract_vers_psalmboek(psalm: int, vers: int) -> str:
         return tekstblok.get_text("\n", strip=True)
     raise HTTPException(status_code=404, detail="Vers niet gevonden bij psalmboek.nl")
 
+def extract_vers_onlinebijbel(psalm: int, vers: int) -> str:
+    url = f"https://www.online-bijbel.nl/psalm/{psalm}"
+    html = cached_get(url)
+    soup = BeautifulSoup(html, "html.parser")
+    regels = [r.strip() for r in soup.get_text("\n").split("\n") if r.strip()]
+    if vers <= len(regels):
+        return regels[vers - 1]
+    raise HTTPException(status_code=404, detail="Vers niet gevonden bij online-bijbel.nl")
+
 @api_router.get("/psalm")
 def psalm_endpoint(
     psalm: int = Query(..., ge=1, le=150),
-    vers: int = Query(..., ge=1)
+    vers: int = Query(..., ge=1),
+    bron: str = Query("psalmboek", description="Bron: psalmboek of onlinebijbel")
 ):
     validate_berijmd_vers(psalm, vers)
-    return {
-        "psalm": psalm,
-        "vers": vers,
-        "tekst": extract_vers_psalmboek(psalm, vers)
-    }
+
+    if bron == "psalmboek":
+        tekst = extract_vers_psalmboek(psalm, vers)
+    elif bron == "onlinebijbel":
+        tekst = extract_vers_onlinebijbel(psalm, vers)
+    else:
+        raise HTTPException(status_code=400, detail="Ongeldige bronoptie")
+
+    return {"psalm": psalm, "vers": vers, "tekst": tekst}
 
 @api_router.get("/psalm/max")
 def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
@@ -79,15 +93,6 @@ def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
 def debug_html(psalm: int):
     html = cached_get(f"https://psalmboek.nl/zingen.php?psalm={psalm}")
     return {"html": html[:5000]}
-
-@app.get("/debug/versen")
-def debug_versen(psalm: int):
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
-    html = cached_get(url)
-    soup = BeautifulSoup(html, "html.parser")
-    vers_elementen = soup.select("#opmaakkolom1 a.psletter")
-    versnummers = [el.get_text(strip=True) for el in vers_elementen]
-    return {"gevonden_versen": versnummers}
 
 @app.get("/")
 def root():
