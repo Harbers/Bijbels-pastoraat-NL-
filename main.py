@@ -38,7 +38,7 @@ def get_max_berijmd_vers(psalm: int) -> int:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
     hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens analyse.")
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen volgens visuele detectie.")
     return hoogste
 
 def validate_berijmd_vers(psalm: int, vers: int):
