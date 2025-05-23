@@ -23,25 +23,23 @@ def cached_get(url: str) -> str:
 
 @lru_cache(maxsize=150)
 def get_max_berijmd_vers(psalm: int) -> int:
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
+    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=1#psvs"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    # Alleen a-tags met href beginnend op '?psID='
-    vers_links = soup.select("a[href^='?psID=']")
-    vers_nummers = set()
+    psvs_div = soup.find("div", id="psvs")
+    if not psvs_div:
+        raise HTTPException(status_code=404, detail=f"Kon verzencontainer niet vinden voor Psalm {psalm}.")
 
-    for el in vers_links:
-        tekst = el.get_text(strip=True)
-        if tekst.isdigit():
-            vers_nummers.add(int(tekst))
-
-    if not vers_nummers:
+    # Tel het aantal h3 elementen onder id="psvs"
+    versregels = psvs_div.find_all("h3")
+    if not versregels:
         raise HTTPException(status_code=404, detail=f"Geen versnummers gevonden voor Psalm {psalm}.")
 
-    hoogste = max(vers_nummers)
-    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen (correct uit hrefs '?psID=').")
+    hoogste = len(versregels)
+    logger.debug(f"Psalm {psalm} heeft {hoogste} verzen op basis van <h3> in #psvs.")
     return hoogste
+
 
 def validate_berijmd_vers(psalm: int, vers: int):
     max_vers = get_max_berijmd_vers(psalm)
