@@ -26,7 +26,7 @@ def get_max_berijmd_vers(psalm: int) -> int:
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
-    vers_elementen = soup.select("div.versen a")  # Correcte selector voor versnummers
+    vers_elementen = soup.select("#opmaakkolom1 a.psletter")
     vers_nummers = set()
 
     for el in vers_elementen:
@@ -75,7 +75,6 @@ def psalm_max_endpoint(psalm: int = Query(..., ge=1, le=150)):
     max_vers = get_max_berijmd_vers(psalm)
     return {"psalm": psalm, "max_vers": max_vers}
 
-# Debug HTML output
 @app.get("/debug/html")
 def debug_html(psalm: int):
     html = cached_get(f"https://psalmboek.nl/zingen.php?psalm={psalm}")
