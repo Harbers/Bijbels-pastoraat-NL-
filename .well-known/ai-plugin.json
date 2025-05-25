@@ -1,16 +1,16 @@
 {
   "schema_version": "v1",
-  "name_for_human": "1773-berijming Psalmen",
-  "name_for_model": "psalmen1773",
-  "description_for_human": "Haalt verzen op uit de officiële 1773-berijming van de Psalmen",
-  "description_for_model": "Gebruik de endpoint /api/psalm voor een enkel vers en /api/psalm/max voor het maximum aantal verzen van een psalm",
+  "name_for_human": "Bijbelse Psalmen",
+  "name_for_model": "psalm_api",
+  "description_for_human": "Haal berijmde psalmverzen op uit de 1773-berijming",
+  "description_for_model": "Gebruik de endpoints /api/psalm en /api/psalm/max om psalmen op te halen",
   "auth": { "type": "none" },
   "api": {
     "type": "openapi",
     "url": "https://bijbels-pastoraat-nl.onrender.com/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/logo.png",
-  "contact_email": "you@domain.com",
+  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
+  "contact_email": "jouw-email@voorbeeld.nl",
   "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
 }
