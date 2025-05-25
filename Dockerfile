@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip \
  && pip install -r requirements.txt
 
-# kopieer applicatie, OpenAPI en plugin-manifest + logo
-COPY main.py openapi.yaml ./.well-known/ai-plugin.json ./.well-known/logo.png ./
+# Kopieer alleen de essentiële bestanden
+COPY main.py openapi.yaml ./.well-known/ai-plugin.json ./
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
