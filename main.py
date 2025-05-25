@@ -28,20 +28,25 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# Scraper 1 – psalmboek.nl via zingen.php
+# Scraper 1 – psalmboek.nl via zingen.php (enkel het eerste vers)
 async def fetch_psalmboek_zingen(ps: int, vs: int):
+    """
+    Pak alleen de eerste paragraaf onder de verse-titel, zodat navigatie en voetnoten buiten beschouwing blijven.
+    """
     url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         return None
     soup = BeautifulSoup(r.text, "html.parser")
+    # Kies strikt de eerste <p> binnen de content-container
     container = soup.select_one("div.content") or soup
-    paragraphs = container.find_all("p")
-    if not paragraphs:
+    p = container.find("p")
+    if not p:
         return None
-    # behoud originele regelbreaks en spaties
-    text = "\n".join(p.get_text(strip=False) for p in paragraphs)
+    # behoud linebreaks binnen paragrafen, zonder extra navigatie
+    text = p.get_text(separator="
+", strip=True)
     return text, "psalmboek.nl/zingen.php"
 
 # Scraper 2 – psalmboek.nl directe verslink
@@ -55,8 +60,8 @@ async def fetch_psalmboek_old(ps: int, vs: int):
     stanza = soup.select_one("div.verse-text")
     if not stanza:
         return None
-    # gebruik newline-separator, geen strip
-    text = stanza.get_text(separator="\n", strip=False)
+    text = stanza.get_text(separator="
+", strip=False)
     return text, "psalmboek.nl/psalm"
 
 # Scraper 3 – reformatorischeomroep.nl
@@ -66,10 +71,14 @@ async def fetch_reformatorischeomroep(ps: int, vs: int):
         r = await client.get(url)
     if r.status_code != 200:
         return None
-    text = r.text  # plain text al met juiste breaks
+    text = r.text
     return text, "reformatorischeomroep.nl"
 
 SCRAPERS = [
+    fetch_psalmboek_old,
+    fetch_psalmboek_zingen,
+    fetch_reformatorischeomroep
+] = [
     fetch_psalmboek_zingen,
     fetch_psalmboek_old,
     fetch_reformatorischeomroep
