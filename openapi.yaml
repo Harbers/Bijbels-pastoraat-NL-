@@ -50,6 +50,7 @@ components:
         - psalm
         - vers
         - text
+        - bron
       properties:
         psalm:
           type: integer
@@ -57,6 +58,9 @@ components:
           type: integer
         text:
           type: string
+        bron:
+          type: string
+          description: Naam of URL-structuur van de bron waaruit dit vers werd opgehaald
 
     Error:
       type: object
