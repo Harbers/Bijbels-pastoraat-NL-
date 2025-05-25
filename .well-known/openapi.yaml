@@ -2,14 +2,8 @@ openapi: 3.1.0
 info:
   title: Bijbelse Psalmen API
   version: "1.0"
-  description: |
-    Haal psalmverzen op uit de berijming van 1773 en bepaal automatisch
-    het maximale aantal verzen per psalm via psalmboek.nl.
-
 servers:
-  - url: https://bijbels-pastoraat-nl.onrender.com
-    description: Productie-URL
-
+  - url: https://<jouw-domain>.onrender.com
 paths:
   /api/psalm:
     get:
@@ -18,34 +12,28 @@ paths:
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
-          required: true
           schema:
             type: integer
             minimum: 1
             maximum: 150
         - name: vers
           in: query
-          description: Versnummer binnen de psalm
-          required: true
           schema:
             type: integer
             minimum: 1
-            maximum: 200
       responses:
-        "200":
+        "200": 
           description: Psalmvers gevonden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PsalmVers"
+                $ref: '#/components/schemas/PsalmVers'
         "404":
           description: Niet gevonden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-
+                $ref: '#/components/schemas/Error'
   /api/psalm/max:
     get:
       operationId: get_psalm_max
@@ -53,55 +41,39 @@ paths:
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
-          required: true
           schema:
             type: integer
             minimum: 1
             maximum: 150
       responses:
         "200":
-          description: Maximaal versnummer
+          description: Maximale versnummer
           content:
             application/json:
               schema:
                 type: integer
-                example: 11
         "404":
-          description: Niet gevonden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
+          $ref: '#/components/responses/NotFound'
 components:
   schemas:
     PsalmVers:
       type: object
-      required:
-        - psalm
-        - vers
-        - text
       properties:
         psalm:
           type: integer
-          description: Psalmbijbelnummer
-          example: 103
         vers:
           type: integer
-          description: Versnummer
-          example: 8
         text:
           type: string
-          description: De volledige tekst van het vers
-          example: "Gelijk het gras is ons kortstondig leven…"
-
     Error:
       type: object
-      required:
-        - detail
       properties:
         detail:
           type: string
-          description: Foutmelding
-          example: "Psalmvers niet gevonden in 1773-berijming"
+  responses:
+    NotFound:
+      description: Niet gevonden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
