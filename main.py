@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from bs4 import BeautifulSoup
@@ -8,18 +8,23 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Bijbelse Psalmen API",
     version="1.0",
-    openapi_url="/openapi.yaml",
+    openapi_url=None,        # we serveren de spec zelf
     docs_url="/docs"
 )
 
-# 1) Serve .well-known (ai-plugin.json, logo.png, etc.)
+# Serveer ai-plugin.json en eventuele logo’s
 app.mount(
     "/.well-known",
     StaticFiles(directory=".well-known", html=False),
     name="well-known"
 )
 
-# 2) Datamodellen
+# Endpoint om de YAML-spec te serveren
+@app.get("/openapi.yaml", include_in_schema=False)
+async def openapi_spec():
+    return FileResponse("openapi.yaml", media_type="application/x-yaml")
+
+# Datamodellen
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -29,8 +34,7 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# 3) Scrapers
-
+# Scraper functies
 async def fetch_psalmboek_zingen(ps: int, vs: int):
     url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -42,7 +46,6 @@ async def fetch_psalmboek_zingen(ps: int, vs: int):
     p = container.find("p")
     if not p:
         return None
-    # preserve inner linebreaks, trim outer whitespace
     text = p.get_text(separator="\n", strip=True)
     return text, "psalmboek.nl/zingen.php"
 
@@ -73,8 +76,7 @@ SCRAPERS = [
     fetch_reformatorischeomroep,
 ]
 
-# 4) API-routes
-
+# API-routes
 @app.get(
     "/api/debug/vers",
     response_model=PsalmVers,
@@ -94,7 +96,7 @@ async def get_berijmd_psalmvers(
             continue
     raise HTTPException(
         status_code=404,
-        detail=f"Psalm {psalm}:{vers} niet gevonden in de 1773-berijming"
+        detail=f"Vers {vers} van Psalm {psalm} kon niet worden opgehaald."
     )
 
 @app.get(
@@ -107,14 +109,10 @@ async def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
-        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+        raise HTTPException(status_code=404, detail=f"Max vers van Psalm {psalm} kon niet worden opgehaald.")
     soup = BeautifulSoup(r.text, "html.parser")
     opts = soup.select("select[name=vers] option")
     waarden = [o.get("value") for o in opts if o.get("value", "").isdigit()]
     if not waarden:
-        raise HTTPException(status_code=404, detail="Geen verzen gevonden")
+        raise HTTPException(status_code=404, detail=f"Geen verzen gevonden voor Psalm {psalm}.")
     return max(int(v) for v in waarden)
-
-@app.get("/openapi.yaml", include_in_schema=False)
-async def openapi_spec():
-    return FileResponse("openapi.yaml", media_type="application/yaml")
