@@ -3,7 +3,7 @@
   "name_for_human": "Bijbelse Psalmen",
   "name_for_model": "psalm_api",
   "description_for_human": "Haal berijmde psalmverzen op uit de 1773-berijming",
-  "description_for_model": "Gebruik de endpoints /api/psalm en /api/psalm/max om psalmen op te halen",
+  "description_for_model": "Gebruik de endpoints /api/psalm en /api/psalm/max",
   "auth": { "type": "none" },
   "api": {
     "type": "openapi",
