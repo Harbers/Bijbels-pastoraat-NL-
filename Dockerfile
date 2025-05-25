@@ -1,15 +1,18 @@
+# Gebruik een lichte Python-basis
 FROM python:3.10-slim
 
+# Werkmap binnen container
 WORKDIR /app
 
-# 1) Kopieer álle bestanden uit de context, inclusief .well-known
+# Kopieer alle bestanden uit de context (incl. .well-known en openapi.yaml)
 COPY . .
 
-# 2) Installeer dependencies
+# Installeer vereisten
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
+# Exposeer poort (Render gebruikt meestal 80)
 EXPOSE 80
 
-# 3) Start je FastAPI‐app
+# Start de app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
