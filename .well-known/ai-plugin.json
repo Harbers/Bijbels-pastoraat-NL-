@@ -2,8 +2,8 @@
   "schema_version": "v1",
   "name_for_human": "Bijbelse Psalmen",
   "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Haal exacte verzen op uit de berijming van 1773 via psalmboek.nl.",
-  "description_for_model": "Gebruik uitsluitend deze plugin om berijmde psalmverzen (1773) op te halen; geen eigen toevoegingen of parafrases.",
+  "description_for_human": "Haal exacte verzen uit de 1773-berijming via psalmboek.nl",
+  "description_for_model": "Gebruik get_psalm_max en get_berijmd_psalmvers om berijmde Psalmverzen (1773) op te halen; geen parafrases.",
   "auth": { "type": "none" },
   "api": {
     "type": "openapi",
