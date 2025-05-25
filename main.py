@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -10,17 +9,16 @@ app = FastAPI(
     title="Bijbelse Psalmen API",
     version="1.0",
     openapi_url="/openapi.yaml",   # serveer de OpenAPI-spec hier
-    docs_url="/docs"               # optioneel: Swagger UI op /docs
+    docs_url="/docs"               # Swagger UI op /docs
 )
 
-# 1) plugin-manifest en eventuele iconen in .well-known/
+# Mount de daadwerkelijke dot-map
 app.mount(
     "/.well-known",
-    StaticFiles(directory="well-known", html=False),
+    StaticFiles(directory=".well-known", html=False),
     name="well-known"
 )
 
-# Data-modellen
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -29,7 +27,6 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# Scraper-functies (gebruik je bestaande implementatie)
 async def fetch_psalmvers(ps: int, vs: int) -> str | None:
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -57,7 +54,6 @@ async def fetch_maxvers(ps: int) -> int | None:
 
 SCRAPERS = [fetch_psalmvers]
 
-# 2) Route voor één vers
 @app.get(
     "/api/psalm",
     response_model=PsalmVers,
@@ -76,7 +72,6 @@ async def get_psalm_vers(
             continue
     raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
 
-# 3) Route voor max-vers
 @app.get(
     "/api/psalm/max",
     response_model=int,
@@ -90,7 +85,6 @@ async def get_psalm_max(
         return mv
     raise HTTPException(status_code=404, detail="Psalm niet gevonden")
 
-# 4) (Optioneel) serveer de YAML-file exact zoals je ‘m hebt
 @app.get("/openapi.yaml", include_in_schema=False)
 async def openapi_spec():
     return FileResponse("openapi.yaml", media_type="application/yaml")
