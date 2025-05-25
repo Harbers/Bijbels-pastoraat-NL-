@@ -5,6 +5,7 @@ info:
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
     description: Productie-server bij Render
+
 paths:
   /api/psalm:
     get:
@@ -13,16 +14,16 @@ paths:
       parameters:
         - name: psalm
           in: query
-          required: true
           description: Psalmnummer (1–150)
+          required: true
           schema:
             type: integer
             minimum: 1
             maximum: 150
         - name: vers
           in: query
+          description: Versnummer
           required: true
-          description: Versnummer binnen die psalm
           schema:
             type: integer
             minimum: 1
@@ -47,8 +48,8 @@ paths:
       parameters:
         - name: psalm
           in: query
-          required: true
           description: Psalmnummer (1–150)
+          required: true
           schema:
             type: integer
             minimum: 1
@@ -57,9 +58,7 @@ paths:
         "200":
           description: Maximaal versnummer
           content:
-            application/json:
-              schema:
-                type: integer
+            text/plain: {}
         "404":
           description: Niet gevonden
           content:
@@ -71,7 +70,10 @@ components:
   schemas:
     PsalmVers:
       type: object
-      required: [psalm, vers, text, bron]
+      required:
+        - psalm
+        - vers
+        - text
       properties:
         psalm:
           type: integer
@@ -83,7 +85,8 @@ components:
           type: string
     Error:
       type: object
-      required: [detail]
+      required:
+        - detail
       properties:
         detail:
           type: string
