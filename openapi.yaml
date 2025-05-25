@@ -1,11 +1,10 @@
 openapi: 3.1.0
 info:
-  title: Bijbelse Psalmen Scraper API
+  title: Bijbelse Psalmen API
   version: "1.0"
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
 paths:
-
   /api/psalm/max:
     get:
       operationId: get_psalm_max
@@ -13,8 +12,8 @@ paths:
       parameters:
         - name: psalm
           in: query
+          description: Psalmnummer (1-150)
           required: true
-          description: Psalmnummer (1–150)
           schema:
             type: integer
             minimum: 1
@@ -27,12 +26,11 @@ paths:
               schema:
                 type: integer
         "404":
-          description: Psalm niet gevonden
+          description: Niet gevonden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
   /api/psalm:
     get:
       operationId: get_psalm_vers
@@ -41,7 +39,6 @@ paths:
         - name: psalm
           in: query
           required: true
-          description: Psalmnummer (1–150)
           schema:
             type: integer
             minimum: 1
@@ -49,7 +46,6 @@ paths:
         - name: vers
           in: query
           required: true
-          description: Versnummer
           schema:
             type: integer
             minimum: 1
@@ -60,34 +56,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmVers"
-        "400":
-          description: Ongeldige parameters
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
         "404":
-          description: Psalmvers niet gevonden
+          description: Niet gevonden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
 components:
   schemas:
     PsalmVers:
       type: object
       required: [psalm, vers, text]
       properties:
-        psalm:
-          type: integer
-        vers:
-          type: integer
-        text:
-          type: string
+        psalm: {type: integer}
+        vers:  {type: integer}
+        text:  {type: string}
     Error:
       type: object
       required: [detail]
       properties:
-        detail:
-          type: string
+        detail: {type: string}
