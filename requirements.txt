@@ -4,4 +4,3 @@ httpx
 beautifulsoup4
 pydantic
 aiofiles
-lxml
