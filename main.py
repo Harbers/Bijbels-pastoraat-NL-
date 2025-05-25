@@ -1,64 +1,92 @@
-from fastapi import FastAPI, Query
-from fastapi.responses import JSONResponse
-import requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import httpx
 from bs4 import BeautifulSoup
 
-app = FastAPI(title="Berijmde Psalmen API", version="1.0")
+app = FastAPI()
 
-def scrape_psalmboek(psalm, vers):
-    url = f"https://psalmboek.nl/berijmd/{psalm}/{vers}"
-    resp = requests.get(url)
-    if resp.status_code != 200:
+### ────────────────────────────────────
+###  Datamodellen
+### ────────────────────────────────────
+class PsalmVers(BaseModel):
+    psalm: int
+    vers: int
+    text: str
+
+class Error(BaseModel):
+    detail: str
+
+### ────────────────────────────────────
+###  Scraping-helpers
+### ────────────────────────────────────
+async def fetch_psalmboek(ps, vs):
+    """
+    Bron 1 – psalmboek.nl
+    URL-patroon: https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773
+    """
+    url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    if r.status_code != 200:
         return None
-    soup = BeautifulSoup(resp.text, "html.parser")
-    verse_div = soup.find("div", {"class": "psalmtekst"})
-    if not verse_div:
+    soup = BeautifulSoup(r.text, "html.parser")
+    stanza = soup.select_one("div.verse-text")
+    return stanza.get_text(strip=True) if stanza else None
+
+
+async def fetch_onlinebijbel(ps, vs):
+    """
+    Bron 2 – online-bijbel.org
+    De site groepeert coupletten anders; daarom zoeken we op de eerste regel.
+    """
+    firstline = {
+        8: "Gelijk het gras is ons kortstondig leven",
+    }.get(vs)
+    if not firstline:
         return None
-    paragraphs = verse_div.find_all("p")
-    # Let op: meestal index = 0 voor vers 1, 1 voor vers 2, etc.
-    if len(paragraphs) >= vers:
-        return paragraphs[vers-1].get_text(strip=True)
+    url = f"https://www.online-bijbel.nl/psalmen-1773/{ps}"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    if r.status_code != 200:
+        return None
+    if firstline in r.text:
+        #   ruwe, maar snelle extractie
+        start = r.text.find(firstline)
+        end = r.text.find("<br/>", start)
+        return BeautifulSoup(r.text[start:end], "html.parser").get_text(strip=True)
     return None
 
-def scrape_liturgie(psalm, vers):
-    url = f"https://www.liturgie.nu/psalmen/{psalm}"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        return None
-    soup = BeautifulSoup(resp.text, "html.parser")
-    # Voorbeeld-structuur, pas aan na inspectie van de site!
-    verses = soup.find_all("div", class_="vers")
-    if len(verses) >= vers:
-        return verses[vers-1].get_text(strip=True)
-    return None
 
-def scrape_bijbelbox(psalm, vers):
-    url = f"https://bijbelbox.nl/psalmen/{psalm}/berijmd"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        return None
-    soup = BeautifulSoup(resp.text, "html.parser")
-    verses = soup.find_all("li", class_="psalm-vers")
-    if len(verses) >= vers:
-        return verses[vers-1].get_text(strip=True)
-    return None
+async def fetch_ro(ps, vs):
+    """
+    Bron 3 – Reformatorische Omroep (plain-text index)
+    """
+    url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    return r.text.strip() if r.status_code == 200 else None
 
-@app.get("/psalm")
-def get_berijmd_psalmvers(psalm: int = Query(..., ge=1, le=150), vers: int = Query(..., ge=1)):
-    # Probeer psalmboek.nl
-    tekst = scrape_psalmboek(psalm, vers)
-    if tekst:
-        return {"bron": "psalmboek.nl", "tekst": tekst}
-    # Probeer liturgie.nu
-    tekst = scrape_liturgie(psalm, vers)
-    if tekst:
-        return {"bron": "liturgie.nu", "tekst": tekst}
-    # Probeer bijbelbox.nl
-    tekst = scrape_bijbelbox(psalm, vers)
-    if tekst:
-        return {"bron": "bijbelbox.nl", "tekst": tekst}
-    return JSONResponse(status_code=404, content={"detail": "Vers niet gevonden in de online bronnen."})
 
-@app.get("/status")
-def status():
-    return {"status": "ok"}
+SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
+
+### ────────────────────────────────────
+###  API-route
+### ────────────────────────────────────
+@app.get(
+    "/api/debug/vers",
+    response_model=PsalmVers,
+    responses={"404": {"model": Error}},
+)
+async def get_berijmd_psalmvers(psalm: int, vers: int):
+    """
+    Zoekt het gevraagde vers achtereenvolgens in drie openbare bronnen.
+    Wordt nergens een resultaat gevonden → 404.
+    """
+    for fn in SCRAPE_SOURCES:
+        try:
+            if (txt := await fn(psalm, vers)):
+                return PsalmVers(psalm=psalm, vers=vers, text=txt)
+        except Exception:
+            #  Bron onbereikbaar?  We proberen stilzwijgend de volgende.
+            continue
+    raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
