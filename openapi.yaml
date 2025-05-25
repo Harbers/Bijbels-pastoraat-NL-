@@ -1,3 +1,5 @@
+# Openapi.yaml terugzetten
+cat > openapi.yaml << 'EOF'
 openapi: 3.1.0
 info:
   title: Bijbelse Psalmen API
@@ -81,16 +83,12 @@ components:
       properties:
         psalm:
           type: integer
-          description: Het psalmnummer
         vers:
           type: integer
-          description: Het versnummer
         text:
           type: string
-          description: De exacte tekst, inclusief originele linebreaks
         bron:
           type: string
-          description: De bron-URL
 
     Error:
       type: object
@@ -99,4 +97,4 @@ components:
       properties:
         detail:
           type: string
-          description: Uitleg van de foutmelding
+EOF
