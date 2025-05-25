@@ -1,16 +1,15 @@
-# 1. Basis­image
 FROM python:3.10-slim
 
-# 2. Werk­directory instellen
 WORKDIR /app
 
-# 3. Eerst alleen requirements kopiëren en installeren
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
-
-# 4. De rest van de code toevoegen
+# 1) Kopieer álle bestanden uit de context, inclusief .well-known
 COPY . .
 
-# 5. Poort open­stellen en app starten
+# 2) Installeer dependencies
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
 EXPOSE 80
+
+# 3) Start je FastAPI‐app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
