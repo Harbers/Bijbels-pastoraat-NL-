@@ -1,18 +1,17 @@
 openapi: 3.1.0
 info:
-  title: "Bijbelse Psalmen API (met externe fallback)"
-  version: "1.1"
+  title: "Bijbelse Psalmen Scraper API"
+  version: "1.0"
   description: >
-    API voor het ophalen van berijmde psalmverzen (1773), met fallback-opties naar Psalmboek.nl, Liturgie.nu en Bijbelbox.nl indien lokaal niet gevonden.
-
+    API die een berijmd psalmvers (1773) ophaalt op basis van psalmnummer en versnummer.
+    Haalt de tekst op via scraping van drie online bronnen.
 servers:
-  - url: https://bijbels-pastoraat-nl.onrender.com
-
+  - url: https://bijbels-pastoraat-nl.onrender.com/api
 paths:
-  /psalm:
+  /debug/vers:
     get:
-      summary: "Haal een (berijmd) psalmvers op"
-      operationId: get_psalm_text
+      summary: "Haal een berijmd psalmvers (1773) op via scraping"
+      operationId: get_berijmd_psalmvers
       parameters:
         - name: psalm
           in: query
@@ -21,53 +20,62 @@ paths:
             type: integer
             minimum: 1
             maximum: 150
-          description: "Het psalmnummer (1-150)."
+          description: "Psalmnummer (1-150, verplicht)"
         - name: vers
           in: query
           required: true
           schema:
             type: integer
             minimum: 1
-          description: "Het gewenste versnummer."
-        - name: hash
-          in: query
-          required: false
-          schema:
-            type: string
-          description: "Optioneel anker (hash)."
+            maximum: 20
+          description: "Versnummer binnen de psalm (meestal 1-20, verplicht)"
       responses:
         '200':
-          description: "De opgevraagde berijmde psalmtekst."
+          description: "Het gevonden berijmde psalmvers"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PsalmResponse'
+                type: object
+                properties:
+                  psalm:
+                    type: integer
+                  vers:
+                    type: integer
+                  text:
+                    type: string
+                    description: "De tekst van het gevonden berijmde psalmvers."
         '404':
-          description: "Geen vers gevonden in lokale database of externe bronnen."
+          description: "Psalmvers niet gevonden"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Niet gevonden"
         '500':
-          description: "Interne serverfout."
+          description: "Interne serverfout"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-components:
-  schemas:
-    PsalmResponse:
-      type: object
-      properties:
-        text:
-          type: string
-          description: "De tekst van het gevraagde berijmde psalmvers."
-        bron:
-          type: string
-          description: "Bron van het gevonden vers ('lokaal', 'psalmboek.nl', 'liturgie.nu', 'bijbelbox.nl')."
-    ErrorResponse:
-      type: object
-      properties:
-        detail:
-          type: string
+                type: object
+                properties:
+                  detail:
+                    type: string
+                    example: "Interne fout"
+  /status:
+    get:
+      summary: "Status van de API"
+      operationId: get_status
+      responses:
+        '200':
+          description: "API is bereikbaar"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
