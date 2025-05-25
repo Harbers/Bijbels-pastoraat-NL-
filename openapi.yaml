@@ -2,6 +2,7 @@ openapi: 3.1.0
 info:
   title: Bijbelse Psalmen API
   version: "1.0"
+
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
     description: Productie-server bij Render
@@ -35,7 +36,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PsalmVers"
         "404":
-          description: Niet gevonden
+          description: Psalmvers niet gevonden
           content:
             application/json:
               schema:
@@ -58,9 +59,11 @@ paths:
         "200":
           description: Maximaal versnummer
           content:
-            text/plain: {}
+            text/plain:
+              schema:
+                type: integer
         "404":
-          description: Niet gevonden
+          description: Psalm niet gevonden
           content:
             application/json:
               schema:
@@ -78,12 +81,16 @@ components:
       properties:
         psalm:
           type: integer
+          description: Het psalmnummer
         vers:
           type: integer
+          description: Het versnummer
         text:
           type: string
+          description: De exacte tekst van het vers, inclusief originele regelafbrekingen
         bron:
           type: string
+          description: De bron-URL of site waarvandaan het vers is gescraped
 
     Error:
       type: object
@@ -92,3 +99,4 @@ components:
       properties:
         detail:
           type: string
+          description: Uitleg van de fout
