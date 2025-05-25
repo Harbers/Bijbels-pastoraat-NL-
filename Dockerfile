@@ -1,18 +1,19 @@
-# Gebruik een lichte Python-basis
+# 1) Kies een lichte Python-basis
 FROM python:3.10-slim
 
-# Werkmap binnen container
+# 2) Werkmap instellen
 WORKDIR /app
 
-# Kopieer alle bestanden uit de context (incl. .well-known en openapi.yaml)
+# 3) Copy requirements en installeer
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 4) Copy de rest van de app (main.py, openapi.yaml, .well-known/)
 COPY . .
 
-# Installeer vereisten
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
-
-# Exposeer poort (Render gebruikt meestal 80)
+# 5) Exposeer poort 80 (Render gebruikt dit)
 EXPOSE 80
 
-# Start de app
+# 6) Start de FastAPI-app via uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "80"]
