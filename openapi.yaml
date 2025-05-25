@@ -2,7 +2,6 @@ openapi: 3.1.0
 info:
   title: Bijbelse Psalmen API
   version: "1.0"
-
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
     description: Productie-server bij Render
@@ -42,6 +41,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/psalm/max:
+    get:
+      summary: Geef maximaal versnummer in 1773-berijming
+      operationId: get_psalm_max
+      parameters:
+        - name: psalm
+          in: query
+          description: Psalmnummer (1–150)
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 150
+      responses:
+        "200":
+          description: Maximaal versnummer
+          content:
+            text/plain: {}
+        "404":
+          description: Niet gevonden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     PsalmVers:
@@ -60,7 +84,6 @@ components:
           type: string
         bron:
           type: string
-          description: Naam of URL-structuur van de bron waaruit dit vers werd opgehaald
 
     Error:
       type: object
