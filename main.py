@@ -13,6 +13,7 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
+# --- bestaande scrapers blijven ongewijzigd ---
 async def fetch_psalmboek(ps, vs):
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -24,7 +25,7 @@ async def fetch_psalmboek(ps, vs):
     return node.get_text(strip=True) if node else None
 
 async def fetch_onlinebijbel(ps, vs):
-    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}  # breid uit voor meer vers-regels
+    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}
     first = firstlines.get(vs)
     if not first:
         return None
@@ -45,15 +46,15 @@ async def fetch_ro(ps, vs):
 
 SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
 
+
 @app.get(
     "/api/psalm",
     response_model=PsalmVers,
-    responses={404: {"model": Error}},
+    responses={"404": {"model": Error}},
     operation_id="get_psalm_vers",
     summary="Haal één berijmd psalmvers (1773)"
 )
 async def get_psalm_vers(psalm: int, vers: int):
-    # probeer elke scraper op volgorde
     for fn in SCRAPE_SOURCES:
         try:
             txt = await fn(psalm, vers)
@@ -63,24 +64,39 @@ async def get_psalm_vers(psalm: int, vers: int):
             continue
     raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
 
+
 @app.get(
     "/api/psalm/max",
     response_model=int,
-    responses={404: {"model": Error}},
+    responses={"404": {"model": Error}},
     operation_id="get_psalm_max",
     summary="Geef maximaal versnummer in 1773-berijming"
 )
 async def get_psalm_max(psalm: int):
-    """
-    Scrape de volledige psalm-pagina en tel het aantal <div class="verse-text"> elementen.
-    """
-    url = f"https://psalmboek.nl/psalm/{psalm:03d}?berijming=1773"
+    # 1) pagina ophalen met verse-ID 1 (altijd bestaande pagina)
+    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=1"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         raise HTTPException(status_code=404, detail="Psalm niet gevonden")
     soup = BeautifulSoup(r.text, "html.parser")
-    verses = soup.select("div.verse-text")
-    if not verses:
-        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
-    return len(verses)
+
+    # 2) vind het <h3>Verzen</h3>-element
+    header = None
+    for h3 in soup.find_all("h3"):
+        if h3.get_text(strip=True) == "Verzen":
+            header = h3
+            break
+    if not header:
+        raise HTTPException(status_code=404, detail="Versen‐lijst niet gevonden")
+
+    # 3) tel alle <a>-links tot aan de volgende <h3>
+    count = 0
+    for sib in header.next_siblings:
+        if getattr(sib, "name", None) == "h3":
+            break
+        count += len(sib.find_all("a")) if hasattr(sib, "find_all") else 0
+
+    if count <= 0:
+        raise HTTPException(status_code=404, detail="Geen verzen gevonden")
+    return count
