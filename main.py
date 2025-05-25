@@ -1,9 +1,20 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import httpx
 from bs4 import BeautifulSoup
 
-app = FastAPI()
+app = FastAPI(
+    title="Bijbelse Psalmen Scraper API",
+    openapi_url="/openapi.yaml"
+)
+
+### ────────────────────────────────────
+### Datamodellen
+### ────────────────────────────────────
+class PsalmMax(BaseModel):
+    psalm: int
+    max_vers: int
 
 class PsalmVers(BaseModel):
     psalm: int
@@ -13,88 +24,66 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-### Scrape één vers uit drie bronnen, in volgorde:
-async def fetch_psalmboek(ps: int, vs: int) -> str | None:
-    url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        return None
-    soup = BeautifulSoup(r.text, "html.parser")
-    el = soup.select_one("div.verse-text")
-    return el.get_text(strip=True) if el else None
+### ────────────────────────────────────
+### OpenAPI & Plugin manifest endpoints
+### ────────────────────────────────────
+@app.get("/openapi.yaml", include_in_schema=False)
+async def openapi_spec():
+    return FileResponse("openapi.yaml")
 
-async def fetch_onlinebijbel(ps: int, vs: int) -> str | None:
-    url = f"https://www.online-bijbel.nl/psalmen-1773/{ps}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        return None
-    # eenvoudige tekst-matching op eerste regel van vers
-    # (uit te breiden met dynamische lookup)
-    lookup = {
-        8: "Gelijk het gras is ons kortstondig leven"
-    }.get(vs)
-    if not lookup or lookup not in r.text:
-        return None
-    start = r.text.find(lookup)
-    end = r.text.find("<br/>", start)
-    return BeautifulSoup(r.text[start:end], "html.parser").get_text(strip=True)
+@app.get("/ai-plugin.json", include_in_schema=False)
+async def plugin_manifest():
+    return FileResponse("ai-plugin.json")
 
-async def fetch_reformatorisch(ps: int, vs: int) -> str | None:
-    url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    return r.text.strip() if r.status_code == 200 else None
-
-SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_reformatorisch]
-
-@app.get(
-    "/api/psalm",
-    response_model=PsalmVers,
-    responses={400: {"model": Error}, 404: {"model": Error}},
-)
-async def getPsalmVers(
-    psalm: int = Query(..., ge=1, le=150),
-    vers: int = Query(..., ge=1),
-):
-    # valideer via max-endpoint
-    # (gebruik /api/psalm/max onder de motorkap)
-    # hier optioneel: fetch Psalm Max en raise 400 bij te groot vers
-    # …
-    for fn in SCRAPE_SOURCES:
-        try:
-            text = await fn(psalm, vers)
-            if text:
-                return PsalmVers(psalm=psalm, vers=vers, text=text)
-        except Exception:
-            continue
-    raise HTTPException(status_code=404, detail="Psalmvers niet gevonden")
-
+### ────────────────────────────────────
+###  Helper: bepaal max vers
+### ────────────────────────────────────
 @app.get(
     "/api/psalm/max",
-    response_model=dict,
+    response_model=PsalmMax,
     responses={404: {"model": Error}},
+    summary="Geef maximaal versnummer in 1773-berijming",
 )
-async def getPsalmMax(
-    psalm: int = Query(..., ge=1, le=150),
-):
-    # scrape hoofdstuk-index op psalmboek.nl
-    url = f"https://psalmboek.nl/psalm/{psalm:03d}?berijming=1773"
+async def get_psalm_max(psalm: int):
+    url = f"https://psalmboek.nl/psalm/{psalm:03d}"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         raise HTTPException(status_code=404, detail="Psalm niet gevonden")
     soup = BeautifulSoup(r.text, "html.parser")
-    # links naar elk vers bevatten “/vers/NN”
-    verses = []
-    for a in soup.select("div.chapter-list a[href*='/vers/']"):
-        href = a["href"]
-        try:
-            num = int(href.split("/vers/")[-1].split("?")[0])
-            verses.append(num)
-        except ValueError:
-            continue
+    # de vers-buttons staan in <nav class="versen"> als <a> met tekst=nr
+    links = soup.select("nav.versen a")
+    verses = [int(a.text) for a in links if a.text.isdigit()]
     if not verses:
-        raise HTTPException(status_code=404, detail="Geen verzen gevonden")
-    return {"psalm": psalm, "max_vers": max(verses)}
+        raise HTTPException(status_code=404, detail="Geen versregister gevonden")
+    return PsalmMax(psalm=psalm, max_vers=max(verses))
+
+### ────────────────────────────────────
+###  Helper: haal vers op
+### ────────────────────────────────────
+@app.get(
+    "/api/psalm",
+    response_model=PsalmVers,
+    responses={404: {"model": Error}},
+    summary="Haal één berijmd psalmvers (1773)",
+)
+async def get_psalm_vers(psalm: int, vers: int):
+    # valideer eerst tegen het max-vers endpoint
+    max_data = await get_psalm_max(psalm)
+    if vers < 1 or vers > max_data.max_vers:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Vers {vers} bestaat niet (max is {max_data.max_vers})"
+        )
+    url = f"https://psalmboek.nl/psalm/{psalm:03d}/vers/{vers:02d}?berijming=1773"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    if r.status_code != 200:
+        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden")
+    soup = BeautifulSoup(r.text, "html.parser")
+    stanza = soup.select_one("div.verse-text")
+    if not stanza:
+        raise HTTPException(status_code=404, detail="Tekst niet gevonden")
+    # behoud originele linebreaks
+    text = "\n".join(line.strip() for line in stanza.get_text("\n").splitlines() if line.strip())
+    return PsalmVers(psalm=psalm, vers=vers, text=text)
