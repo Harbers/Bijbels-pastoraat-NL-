@@ -13,8 +13,10 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# --- bestaande scrapers blijven ongewijzigd ---
-async def fetch_psalmboek(ps, vs):
+async def fetch_psalmboek(ps: int, vs: int) -> str | None:
+    """
+    Haalt de tekst uit psalmboek.nl (div.verse-text).
+    """
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
@@ -22,10 +24,17 @@ async def fetch_psalmboek(ps, vs):
         return None
     soup = BeautifulSoup(r.text, "html.parser")
     node = soup.select_one("div.verse-text")
-    return node.get_text(strip=True) if node else None
+    return node.get_text(" ", strip=True) if node else None
 
-async def fetch_onlinebijbel(ps, vs):
-    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}
+async def fetch_onlinebijbel(ps: int, vs: int) -> str | None:
+    """
+    Fallback scraper op basis van Online-Bijbel.nl.
+    (Voor sommige eerste regels; breid zelf uit.)
+    """
+    firstlines = {
+        8: "Gelijk het gras is ons kortstondig leven",
+        # voeg hier meer verse → eerste regel mappings toe
+    }
     first = firstlines.get(vs)
     if not first:
         return None
@@ -36,16 +45,23 @@ async def fetch_onlinebijbel(ps, vs):
         return None
     start = r.text.find(first)
     end = r.text.find("<br/>", start)
-    return BeautifulSoup(r.text[start:end], "html.parser").get_text(strip=True)
+    snippet = r.text[start:end]
+    return BeautifulSoup(snippet, "html.parser").get_text(" ", strip=True)
 
-async def fetch_ro(ps, vs):
+async def fetch_ro(ps: int, vs: int) -> str | None:
+    """
+    Tekst via Reformatorische Omroep (plain-text endpoint).
+    """
     url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     return r.text.strip() if r.status_code == 200 else None
 
-SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
-
+SCRAPE_SOURCES = [
+    fetch_psalmboek,
+    fetch_onlinebijbel,
+    fetch_ro,
+]
 
 @app.get(
     "/api/psalm",
@@ -55,15 +71,20 @@ SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
     summary="Haal één berijmd psalmvers (1773)"
 )
 async def get_psalm_vers(psalm: int, vers: int):
-    for fn in SCRAPE_SOURCES:
+    """
+    Probeert in volgorde alle scrapers totdat één tekst oplevert.
+    """
+    for scraper in SCRAPE_SOURCES:
         try:
-            txt = await fn(psalm, vers)
+            txt = await scraper(psalm, vers)
             if txt:
                 return PsalmVers(psalm=psalm, vers=vers, text=txt)
-        except:
+        except Exception:
             continue
-    raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
-
+    raise HTTPException(
+        status_code=404,
+        detail="Psalmvers niet gevonden in 1773-berijming"
+    )
 
 @app.get(
     "/api/psalm/max",
@@ -73,30 +94,20 @@ async def get_psalm_vers(psalm: int, vers: int):
     summary="Geef maximaal versnummer in 1773-berijming"
 )
 async def get_psalm_max(psalm: int):
-    # 1) pagina ophalen met verse-ID 1 (altijd bestaande pagina)
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=1"
+    """
+    Dynamisch het aantal verzen tellen door de optie-lijst op psalmboek.nl uit te lezen.
+    """
+    url = f"https://psalmboek.nl/psalm/{psalm:03d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         raise HTTPException(status_code=404, detail="Psalm niet gevonden")
     soup = BeautifulSoup(r.text, "html.parser")
-
-    # 2) vind het <h3>Verzen</h3>-element
-    header = None
-    for h3 in soup.find_all("h3"):
-        if h3.get_text(strip=True) == "Verzen":
-            header = h3
-            break
-    if not header:
-        raise HTTPException(status_code=404, detail="Versen‐lijst niet gevonden")
-
-    # 3) tel alle <a>-links tot aan de volgende <h3>
-    count = 0
-    for sib in header.next_siblings:
-        if getattr(sib, "name", None) == "h3":
-            break
-        count += len(sib.find_all("a")) if hasattr(sib, "find_all") else 0
-
-    if count <= 0:
+    select = soup.find("select", id="select-vers")
+    if not select:
+        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+    options = select.find_all("option")
+    if not options:
         raise HTTPException(status_code=404, detail="Geen verzen gevonden")
-    return count
+    max_vers = int(options[-1]["value"])
+    return max_vers
