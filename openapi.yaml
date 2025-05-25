@@ -2,7 +2,6 @@ openapi: 3.1.0
 info:
   title: Bijbelse Psalmen API
   version: "1.0"
-
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
     description: Productie-server bij Render
@@ -36,7 +35,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PsalmVers"
         "404":
-          description: Vers niet gevonden
+          description: Niet gevonden
           content:
             application/json:
               schema:
@@ -59,11 +58,9 @@ paths:
         "200":
           description: Maximaal versnummer
           content:
-            text/plain:
-              schema:
-                type: integer
+            text/plain: {}
         "404":
-          description: Max vers niet gevonden
+          description: Niet gevonden
           content:
             application/json:
               schema:
