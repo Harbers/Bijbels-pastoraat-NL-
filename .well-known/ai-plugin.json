@@ -1,9 +1,9 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Bijbelse Psalmen",
-  "name_for_model": "psalm_api",
-  "description_for_human": "Haal berijmde psalmverzen op uit de 1773-berijming",
-  "description_for_model": "Gebruik de endpoints /api/psalm en /api/psalm/max",
+  "name_for_human": "Bijbels Pastorale Zorg",
+  "name_for_model": "bijbels_pastoraat",
+  "description_for_human": "Haal berijmde psalmen op uit de 1773-berijming.",
+  "description_for_model": "Use getPsalmVers and getPsalmMax to fetch psalm texts from psalmboek.nl.",
   "auth": { "type": "none" },
   "api": {
     "type": "openapi",
@@ -11,6 +11,6 @@
     "is_user_authenticated": false
   },
   "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
-  "contact_email": "jouw-email@voorbeeld.nl",
+  "contact_email": "support@bijbels-pastoraat-nl.onrender.com",
   "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
 }
