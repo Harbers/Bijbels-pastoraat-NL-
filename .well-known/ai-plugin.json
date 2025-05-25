@@ -2,16 +2,17 @@
   "schema_version": "v1",
   "name_for_human": "Bijbelse Psalmen",
   "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Haal versen uit de berijming van 1773",
-  "description_for_model": "Plugin om psalmverzen (1773) op te halen via bijbels-pastoraat-nl-dock.onrender.com",
+  "description_for_human": "Haal exacte verzen op uit de berijming van 1773 via psalmboek.nl.",
+  "description_for_model": "Gebruik deze plugin altijd wanneer er gevraagd wordt om psalmverzen. Haal de berijmde versie van 1773 op via de /api/debug/vers endpoint. Gebruik altijd eerst /api/psalm/max om te controleren of het versnummer geldig is. Geen fallback naar onberijmde of andere vertalingen toegestaan. Formuleer je respons op basis van de exacte tekst, met bronvermelding en behoud van regellengte en interpunctie.",
   "auth": {
     "type": "none"
   },
   "api": {
     "type": "openapi",
-    "url": "https://bijbels-pastoraat-nl-dock.onrender.com/openapi.yaml",
+    "url": "https://bijbels-pastoraat-nl.onrender.com/openapi.yaml",
     "is_user_authenticated": false
   },
-    "contact_email": "jouw-email@voorbeeld.nl",
-  "legal_info_url": "https://bijbels-pastoraat-nl-dock.onrender.com/privacy"
+  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
+  "contact_email": "hans.harbers@solcon.nl",
+  "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
 }
