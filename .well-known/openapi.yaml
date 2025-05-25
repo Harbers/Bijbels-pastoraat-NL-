@@ -3,61 +3,77 @@ info:
   title: Bijbelse Psalmen API
   version: "1.0"
 servers:
-  - url: https://<jouw-domain>.onrender.com
+  - url: https://bijbels-pastoraat-nl-dock.onrender.com
+    description: Productie-server bij Render
+
 paths:
   /api/psalm:
     get:
-      operationId: get_psalm_vers
       summary: Haal één berijmd psalmvers (1773)
+      operationId: get_psalm_vers
       parameters:
         - name: psalm
           in: query
+          description: Psalmnummer (1–150)
+          required: true
           schema:
             type: integer
             minimum: 1
             maximum: 150
         - name: vers
           in: query
+          description: Versnummer
+          required: true
           schema:
             type: integer
             minimum: 1
       responses:
-        "200": 
+        "200":
           description: Psalmvers gevonden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PsalmVers'
+                $ref: "#/components/schemas/PsalmVers"
         "404":
           description: Niet gevonden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
+
   /api/psalm/max:
     get:
-      operationId: get_psalm_max
       summary: Geef maximaal versnummer in 1773-berijming
+      operationId: get_psalm_max
       parameters:
         - name: psalm
           in: query
+          description: Psalmnummer (1–150)
+          required: true
           schema:
             type: integer
             minimum: 1
             maximum: 150
       responses:
         "200":
-          description: Maximale versnummer
+          description: Maximaal versnummer
+          content:
+            text/plain: {}
+        "404":
+          description: Niet gevonden
           content:
             application/json:
               schema:
-                type: integer
-        "404":
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     PsalmVers:
       type: object
+      required:
+        - psalm
+        - vers
+        - text
       properties:
         psalm:
           type: integer
@@ -65,15 +81,11 @@ components:
           type: integer
         text:
           type: string
+
     Error:
       type: object
+      required:
+        - detail
       properties:
         detail:
           type: string
-  responses:
-    NotFound:
-      description: Niet gevonden
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
