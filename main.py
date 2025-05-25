@@ -12,13 +12,14 @@ app = FastAPI(
     docs_url="/docs"
 )
 
-# Serveer de plugin-manifest en statische bestanden uit .well-known/
+# 1) Serve .well-known (ai-plugin.json, logo.png, etc.)
 app.mount(
     "/.well-known",
     StaticFiles(directory=".well-known", html=False),
     name="well-known"
 )
 
+# 2) Datamodellen
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -28,28 +29,23 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# Scraper 1 – psalmboek.nl via zingen.php (enkel het eerste vers)
+# 3) Scrapers
+
 async def fetch_psalmboek_zingen(ps: int, vs: int):
-    """
-    Pak alleen de eerste paragraaf onder de verse-titel, zodat navigatie en voetnoten buiten beschouwing blijven.
-    """
     url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         return None
     soup = BeautifulSoup(r.text, "html.parser")
-    # Kies strikt de eerste <p> binnen de content-container
     container = soup.select_one("div.content") or soup
     p = container.find("p")
     if not p:
         return None
-    # behoud linebreaks binnen paragrafen, zonder extra navigatie
-    text = p.get_text(separator="
-", strip=True)
+    # preserve inner linebreaks, trim outer whitespace
+    text = p.get_text(separator="\n", strip=True)
     return text, "psalmboek.nl/zingen.php"
 
-# Scraper 2 – psalmboek.nl directe verslink
 async def fetch_psalmboek_old(ps: int, vs: int):
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -60,29 +56,24 @@ async def fetch_psalmboek_old(ps: int, vs: int):
     stanza = soup.select_one("div.verse-text")
     if not stanza:
         return None
-    text = stanza.get_text(separator="
-", strip=False)
+    text = stanza.get_text(separator="\n", strip=False)
     return text, "psalmboek.nl/psalm"
 
-# Scraper 3 – reformatorischeomroep.nl
 async def fetch_reformatorischeomroep(ps: int, vs: int):
     url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         return None
-    text = r.text
-    return text, "reformatorischeomroep.nl"
+    return r.text, "reformatorischeomroep.nl"
 
 SCRAPERS = [
     fetch_psalmboek_old,
     fetch_psalmboek_zingen,
-    fetch_reformatorischeomroep
-] = [
-    fetch_psalmboek_zingen,
-    fetch_psalmboek_old,
-    fetch_reformatorischeomroep
+    fetch_reformatorischeomroep,
 ]
+
+# 4) API-routes
 
 @app.get(
     "/api/debug/vers",
@@ -111,9 +102,7 @@ async def get_berijmd_psalmvers(
     response_model=int,
     responses={404: {"model": Error}}
 )
-async def get_psalm_max(
-    psalm: int = Query(..., ge=1, le=150)
-):
+async def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=8"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
