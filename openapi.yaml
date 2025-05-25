@@ -1,81 +1,83 @@
-openapi: 3.1.0
+openapi: 3.1.0             # builder eist 3.1.0
 info:
-  title: "Bijbelse Psalmen Scraper API"
+  title: Bijbelse Psalmen API
   version: "1.0"
-  description: >
-    API die een berijmd psalmvers (1773) ophaalt op basis van psalmnummer en versnummer.
-    Haalt de tekst op via scraping van drie online bronnen.
+  description: |
+    Geeft berijmde psalmverzen (1773-berijming) op basis van psalm- en versnummer.
 servers:
-  - url: https://bijbels-pastoraat-nl.onrender.com/api
+  - url: https://bijbels-pastoraat-nl.onrender.com
+
 paths:
-  /debug/vers:
+  /api/psalm:
     get:
-      summary: "Haal een berijmd psalmvers (1773) op via scraping"
-      operationId: get_berijmd_psalmvers
+      operationId: get_psalm_text
+      summary: 'Berijmd psalmvers (standaard-route)'
       parameters:
         - name: psalm
           in: query
+          description: Psalmnummer (1-150)
           required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 150
-          description: "Psalmnummer (1-150, verplicht)"
+          schema: { type: integer, minimum: 1, maximum: 150 }
         - name: vers
           in: query
+          description: Versnummer binnen de psalm
           required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 20
-          description: "Versnummer binnen de psalm (meestal 1-20, verplicht)"
+          schema: { type: integer, minimum: 1, maximum: 20 }
       responses:
         '200':
-          description: "Het gevonden berijmde psalmvers"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  psalm:
-                    type: integer
-                  vers:
-                    type: integer
-                  text:
-                    type: string
-                    description: "De tekst van het gevonden berijmde psalmvers."
-        '404':
-          description: "Psalmvers niet gevonden"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "Niet gevonden"
-        '500':
-          description: "Interne serverfout"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "Interne fout"
-  /status:
+          description: Gevonden psalmvers
+          content: { application/json: { schema: { $ref: '#/components/schemas/Psalm' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/debug/vers:
     get:
-      summary: "Status van de API"
-      operationId: get_status
+      operationId: get_berijmd_psalmvers
+      summary: 'Berijmd psalmvers — scraping-route'
+      parameters:
+        - name: psalm
+          in: query
+          description: Psalmnummer (1-150)
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 150 }
+        - name: vers
+          in: query
+          description: Versnummer binnen de psalm
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 20 }
       responses:
         '200':
-          description: "API is bereikbaar"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "ok"
+          description: Gevonden psalmvers
+          content: { application/json: { schema: { $ref: '#/components/schemas/Psalm' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/status:
+    get:
+      operationId: get_status
+      summary: 'Health-check'
+      responses:
+        '200':
+          description: API is bereikbaar
+          content: { application/json: { schema: { $ref: '#/components/schemas/Status' } } }
+
+components:
+  schemas:
+    Psalm:
+      type: object
+      required: [psalm, vers, text]
+      properties:
+        psalm: { type: integer }
+        vers:  { type: integer }
+        text:  { type: string, description: Berijmde tekst }
+    Status:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+    Error:
+      type: object
+      properties:
+        detail: { type: string, example: Niet gevonden }
+
+  responses:
+    NotFound:
+      description: Psalmvers niet gevonden
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
