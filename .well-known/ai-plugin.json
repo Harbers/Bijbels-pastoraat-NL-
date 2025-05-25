@@ -1,18 +1,18 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Bijbelse Pastorale Zorg",
+  "name_for_human": "Bijbelse Psalmen",
   "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Geef me een berijmd psalmvers uit de 1773-berijming",
-  "description_for_model": "Use the get_psalm_vers and get_psalm_max operations to fetch psalm texts.",
+  "description_for_human": "Haal versen uit de berijming van 1773",
+  "description_for_model": "Plugin om psalmverzen (1773) op te halen via bijbels-pastoraat-nl-dock.onrender.com",
   "auth": {
     "type": "none"
   },
   "api": {
     "type": "openapi",
-    "url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/openapi.yaml",
+    "url": "https://bijbels-pastoraat-nl-dock.onrender.com/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "",
-  "contact_email": "admin@bijbels-pastoraat.nl",
-  "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
+  "logo_url": "https://bijbels-pastoraat-nl-dock.onrender.com/.well-known/logo.png",
+  "contact_email": "jouw-email@voorbeeld.nl",
+  "legal_info_url": "https://bijbels-pastoraat-nl-dock.onrender.com/privacy"
 }
