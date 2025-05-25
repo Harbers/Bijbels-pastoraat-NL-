@@ -1,132 +1,148 @@
-"""FastAPI‑backend voor berijmde psalmteksten (1773)
-====================================================
-Scrapet **psalmboek.nl** en levert:
-* `/api/psalm/max`  → hoogste berijmde versnummer
-* `/api/psalm`      → letterlijke vers‑tekst
-* `/debug/versen`   → snelle controle van gedetecteerde verzen
+"""main.py – FastAPI‑backend voor berijmde psalmen 1773
+=====================================================
 
-Belangrijkste wijziging
-----------------------
-De vers‐detector werkt nu met **regex** over de ruwe HTML in plaats van met
-fragiele CSS‑selectoren. Hij zoekt naar patronen:
+* `/api/psalm/max` – hoogste beschikbare vers (berijmd)
+* `/api/psalm`     – letterlijke tekst van één berijmd vers
+* `/debug/versen`  – lijst gedetecteerde versnummers (debug)
+* `/debug/vers`    – ruwe tekst van één vers (debug)
 
-```
-psalm=<nummer>&psvID=<vers>
-```
-
-Deze combinatie komt uitsluitend voor in de links rechtsboven – de
-berijmde‑versnavigatie. Hij kan dus niet per ongeluk het raster van
-psalmnummers treffen.
+De scraper gebruikt alleen **psalmboek.nl**.  Hij zoekt naar links met het
+patroon `psalm={X}&psvID={Y}` in de sectie `<div class="verzen">`; die
+links verwijzen exclusief naar de berijmde verzen.
 """
+from __future__ import annotations
 
 import re
+from functools import lru_cache
+from typing import List, Set
+
 import requests
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, APIRouter, HTTPException, Query
-from functools import lru_cache
 import logging
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("psalm_api")
+log = logging.getLogger("psalm_api")
 
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
+app = FastAPI(title="Berijmde Psalmen 1773 API")
+api = APIRouter(prefix="/api")
 
 # ---------------------------------------------------------------------------
-#  Hulp: HTTP‑cache
+#  Helpers
 # ---------------------------------------------------------------------------
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=1024)
 def cached_get(url: str) -> str:
-    """Haalt een URL op met basis‑headers en korte timeout, met LRU‑cache."""
+    """Download pagina met eenvoudige caching."""
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": "Mozilla/5.0 (compatible; PsalmScraper/1.0)",
         "Accept-Language": "nl-NL,nl;q=0.9",
     }
-    resp = requests.get(url, headers=headers, timeout=10)
+    resp = requests.get(url, headers=headers, timeout=15)
     if resp.status_code != 200:
-        raise HTTPException(resp.status_code, f"Fout bij ophalen {url}")
+        raise HTTPException(resp.status_code, f"Fout bij ophalen van {url}")
     return resp.text
 
+
 # ---------------------------------------------------------------------------
-#  Kern: aantal verzen bepalen via regex
+#  Stap 1 – bepaal hoeveel verzen een psalm heeft (berijmd)
 # ---------------------------------------------------------------------------
 
-VERZEN_REGEX = re.compile(r"psalm=(?P<ps>\d+)&psvID=(?P<vers>\d+)")
+VERSLINK_RE = re.compile(r"psalm=(?P<ps>\d+)&psvID=(?P<vers>\d+)")
 
 @lru_cache(maxsize=150)
 def get_max_berijmd_vers(psalm: int) -> int:
-    """Geeft hoogste berijmde versnummer voor *psalm*.
-
-    We zoeken naar alle hyperlinks waarin zowel het gevraagde psalmnummer
-    (psalm=123) als een psvID‑parameter voorkomen. Dat zijn **alleen** de
-    berijmde verslinks.
-    """
-    url  = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
+    """Zoek links als  psalm={psalm}&psvID={vers}  en neem hoogste vers."""
+    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
     html = cached_get(url)
+    soup = BeautifulSoup(html, "html.parser")
 
-    matches = {
-        int(m.group("vers"))
-        for m in VERZEN_REGEX.finditer(html)
-        if int(m.group("ps")) == psalm
-    }
-    if not matches:
-        raise HTTPException(404, f"Geen berijmde verzen gevonden voor Psalm {psalm}.")
+    # Berijmde vers‑navigatie staat altijd in <div class="verzen"> … </div>
+    verzen_div = soup.find("div", class_="verzen")
+    if not verzen_div:
+        raise HTTPException(404, f"Div.verzen niet gevonden voor Psalm {psalm}.")
 
-    max_vers = max(matches)
-    logger.info("Psalm %d → %d verzen (berijmd)", psalm, max_vers)
-    return max_vers
+    vers_nrs: Set[int] = set()
+    for a in verzen_div.find_all("a", href=True):
+        m = VERSLINK_RE.search(a["href"])
+        if m and int(m["ps"]) == psalm:
+            vers_nrs.add(int(m["vers"]))
+
+    if not vers_nrs:
+        raise HTTPException(404, f"Geen berijmde verzen gevonden voor Psalm {psalm}.")
+
+    highest = max(vers_nrs)
+    log.info("Psalm %d heeft %d verzen.", psalm, highest)
+    return highest
+
 
 # ---------------------------------------------------------------------------
-#  Vers‑tekst ophalen
+#  Stap 2 – tekst van één vers ophalen
 # ---------------------------------------------------------------------------
 
 def extract_vers_psalmboek(psalm: int, vers: int) -> str:
-    url  = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
+    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID={vers}#psvs"
     html = cached_get(url)
     soup = BeautifulSoup(html, "html.parser")
-    blok = soup.find("div", id="psvs")
-    if not blok:
-        raise HTTPException(404, "Vers niet gevonden (HTML‑structuur gewijzigd?)")
-    return blok.get_text("\n", strip=True)
+
+    ps_div = soup.find("div", id="psvs")
+    if not ps_div:
+        raise HTTPException(404, "Vers-container (#psvs) niet gevonden.")
+
+    # Eerste <h3> bevat het versnummer → verwijderen voor zuivere tekst
+    first_h3 = ps_div.find("h3")
+    if first_h3:
+        first_h3.decompose()
+
+    lines: List[str] = [ln.strip() for ln in ps_div.get_text("\n").split("\n") if ln.strip()]
+    if not lines:
+        raise HTTPException(404, "Lege vers-tekst.")
+
+    return "\n".join(lines)
+
 
 # ---------------------------------------------------------------------------
 #  API‑endpoints
 # ---------------------------------------------------------------------------
 
-@api_router.get("/psalm/max")
-def max_endpoint(psalm: int = Query(..., ge=1, le=150)):
+@api.get("/psalm/max")
+def api_psalm_max(psalm: int = Query(..., ge=1, le=150)):
+    """Hoogste versnummer (berijmd)."""
     return {"psalm": psalm, "max_vers": get_max_berijmd_vers(psalm)}
 
-@api_router.get("/psalm")
-def psalm_endpoint(
+
+@api.get("/psalm")
+def api_psalm(
     psalm: int = Query(..., ge=1, le=150),
-    vers:  int = Query(..., ge=1),
+    vers: int = Query(..., ge=1)
 ):
-    max_vers = get_max_berijmd_vers(psalm)
-    if vers > max_vers:
-        raise HTTPException(400, f"Psalm {psalm} heeft slechts {max_vers} verzen.")
+    max_v = get_max_berijmd_vers(psalm)
+    if vers > max_v:
+        raise HTTPException(400, f"Vers {vers} bestaat niet; hoogste vers is {max_v}.")
     tekst = extract_vers_psalmboek(psalm, vers)
     return {"psalm": psalm, "vers": vers, "tekst": tekst}
 
+
 # ---------------------------------------------------------------------------
-#  Debug‑route
+#  Debug-routes
 # ---------------------------------------------------------------------------
 
 @app.get("/debug/versen")
-def debug_versen(psalm: int):
+def dbg_versen(psalm: int):
     url  = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
-    html = cached_get(url)
-    matches = [int(m.group("vers")) for m in VERZEN_REGEX.finditer(html) if int(m.group("ps")) == psalm]
-    return {"gevonden_versen": sorted(matches)}
+    links = VERSLINK_RE.findall(cached_get(url))
+    return {"versen": [int(v) for p, v in links if int(p) == psalm]}
+
+
+@app.get("/debug/vers")
+def dbg_vers(psalm: int, vers: int):
+    return {"tekst": extract_vers_psalmboek(psalm, vers)}
+
 
 # ---------------------------------------------------------------------------
 
 @app.get("/")
 def root():
-    return {"status": "Psalm‑API actief (berijming 1773)"}
+    return {"status": "Psalm‑API actief (berijmd 1773)"}
 
-app.include_router(api_router)
+app.include_router(api)
