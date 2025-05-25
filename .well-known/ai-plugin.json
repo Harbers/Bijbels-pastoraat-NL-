@@ -12,7 +12,6 @@
     "url": "https://bijbels-pastoraat-nl-dock.onrender.com/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "https://bijbels-pastoraat-nl-dock.onrender.com/.well-known/logo.png",
-  "contact_email": "jouw-email@voorbeeld.nl",
+    "contact_email": "jouw-email@voorbeeld.nl",
   "legal_info_url": "https://bijbels-pastoraat-nl-dock.onrender.com/privacy"
 }
