@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.responses import FileResponse
 import httpx
 from bs4 import BeautifulSoup
 
@@ -70,7 +71,7 @@ SCRAPE_SOURCES = [
 ]
 
 ### ────────────────────────────────────
-###  API-route
+###  API-routes
 ### ────────────────────────────────────
 @app.get(
     "/api/debug/vers",
@@ -88,3 +89,7 @@ async def get_berijmd_psalmvers(psalm: int, vers: int):
         status_code=404,
         detail=f"Psalm {psalm}:{vers} niet gevonden in de 1773-berijming"
     )
+
+@app.get("/openapi.yaml", include_in_schema=False)
+async def openapi_spec():
+    return FileResponse("openapi.yaml", media_type="application/yaml")
