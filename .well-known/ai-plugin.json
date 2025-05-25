@@ -4,9 +4,7 @@
   "name_for_model": "bijbels_pastoraat",
   "description_for_human": "Vraag berijmde psalmverzen (1773) op uit psalmboek.nl",
   "description_for_model": "Gebruik /api/psalm/max om het maximale versnummer te valideren en /api/psalm om één vers op te halen. Geen eigen tekst toevoegen.",
-  "auth": {
-    "type": "none"
-  },
+  "auth": { "type": "none" },
   "api": {
     "type": "openapi",
     "url": "https://bijbels-pastoraat-nl.onrender.com/openapi.yaml",
