@@ -1,9 +1,9 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Bijbelse Pastorale Zorg",
+  "name_for_human": "Bijbelse Psalmen 1773",
   "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Vraag berijmde psalmverzen op uit de 1773-berijming via psalmboek.nl",
-  "description_for_model": "Gebruik de endpoints getPsalmMax en getPsalmVers om psalmteksten uit de 1773-berijming op te halen van psalmboek.nl. Valideer via /api/psalm/max en geef een foutmelding als vers buiten bereik valt.",
+  "description_for_human": "Haal berijmde psalmverzen van de 1773-berijming op via psalmboek.nl",
+  "description_for_model": "Gebruik de endpoint GET /api/psalm en GET /api/psalm/max om psalm 1–150 en vers 1–n op te halen uit de 1773-berijming. Geef JSON met velden psalm, vers, text en bron, of 404 met detail.",
   "auth": {
     "type": "none"
   },
