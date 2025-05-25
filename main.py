@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -13,14 +12,13 @@ app = FastAPI(
     docs_url="/docs"
 )
 
-# 1) Serveer alle bestanden uit .well-known/ (o.a. ai-plugin.json, logo.png)
+# Serveer de plugin-manifest en statische bestanden uit .well-known/
 app.mount(
     "/.well-known",
     StaticFiles(directory=".well-known", html=False),
     name="well-known"
 )
 
-# 2) Datamodellen
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -30,7 +28,7 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# 3) Scrapers (keer altijd tuple (text, bron))
+# Scraper 1 – psalmboek.nl via zingen.php
 async def fetch_psalmboek_zingen(ps: int, vs: int):
     url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -39,11 +37,14 @@ async def fetch_psalmboek_zingen(ps: int, vs: int):
         return None
     soup = BeautifulSoup(r.text, "html.parser")
     container = soup.select_one("div.content") or soup
-    p = container.find("p")
-    if not p: 
+    paragraphs = container.find_all("p")
+    if not paragraphs:
         return None
-    return p.get_text(strip=True), "psalmboek.nl/zingen.php"
+    # behoud originele regelbreaks en spaties
+    text = "\n".join(p.get_text(strip=False) for p in paragraphs)
+    return text, "psalmboek.nl/zingen.php"
 
+# Scraper 2 – psalmboek.nl directe verslink
 async def fetch_psalmboek_old(ps: int, vs: int):
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -54,15 +55,19 @@ async def fetch_psalmboek_old(ps: int, vs: int):
     stanza = soup.select_one("div.verse-text")
     if not stanza:
         return None
-    return stanza.get_text(strip=True), "psalmboek.nl/psalm"
+    # gebruik newline-separator, geen strip
+    text = stanza.get_text(separator="\n", strip=False)
+    return text, "psalmboek.nl/psalm"
 
+# Scraper 3 – reformatorischeomroep.nl
 async def fetch_reformatorischeomroep(ps: int, vs: int):
     url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         return None
-    return r.text.strip(), "reformatorischeomroep.nl"
+    text = r.text  # plain text al met juiste breaks
+    return text, "reformatorischeomroep.nl"
 
 SCRAPERS = [
     fetch_psalmboek_zingen,
@@ -70,7 +75,6 @@ SCRAPERS = [
     fetch_reformatorischeomroep
 ]
 
-# 4) API-routes
 @app.get(
     "/api/debug/vers",
     response_model=PsalmVers,
@@ -88,14 +92,19 @@ async def get_berijmd_psalmvers(
                 return PsalmVers(psalm=psalm, vers=vers, text=text, bron=bron)
         except Exception:
             continue
-    raise HTTPException(status_code=404, detail=f"Psalm {psalm}:{vers} niet gevonden")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Psalm {psalm}:{vers} niet gevonden in de 1773-berijming"
+    )
 
 @app.get(
     "/api/psalm/max",
     response_model=int,
     responses={404: {"model": Error}}
 )
-async def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
+async def get_psalm_max(
+    psalm: int = Query(..., ge=1, le=150)
+):
     url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=8"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
@@ -103,7 +112,7 @@ async def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
         raise HTTPException(status_code=404, detail="Psalm niet gevonden")
     soup = BeautifulSoup(r.text, "html.parser")
     opts = soup.select("select[name=vers] option")
-    waarden = [o["value"] for o in opts if o.get("value","").isdigit()]
+    waarden = [o.get("value") for o in opts if o.get("value", "").isdigit()]
     if not waarden:
         raise HTTPException(status_code=404, detail="Geen verzen gevonden")
     return max(int(v) for v in waarden)
