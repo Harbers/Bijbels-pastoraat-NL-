@@ -1,6 +1,4 @@
-fastapi
-uvicorn
-requests
-beautifulsoup4
-duckduckgo_search
-selenium>=4.0.0
+fastapi==0.115.2
+uvicorn[standard]==0.34.2
+requests==2.32.3
+beautifulsoup4==4.13.4
