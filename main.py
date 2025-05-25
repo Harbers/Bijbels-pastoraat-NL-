@@ -8,11 +8,10 @@ from bs4 import BeautifulSoup
 app = FastAPI(
     title="Bijbelse Psalmen API",
     version="1.0",
-    openapi_url="/openapi.yaml",   # serveer de OpenAPI-spec hier
-    docs_url="/docs"               # Swagger UI op /docs
+    openapi_url="/openapi.yaml",
+    docs_url="/docs"
 )
 
-# Mount de daadwerkelijke dot-map
 app.mount(
     "/.well-known",
     StaticFiles(directory=".well-known", html=False),
@@ -27,6 +26,7 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
+# Haal één berijmd psalmvers (1773) op van psalmboek.nl
 async def fetch_psalmvers(ps: int, vs: int) -> str | None:
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -38,6 +38,7 @@ async def fetch_psalmvers(ps: int, vs: int) -> str | None:
     node = soup.select_one("div.verse-text")
     return node.get_text(strip=True) if node else None
 
+# Haal het maximaal aantal verzen op van een psalm in de 1773-berijming
 async def fetch_maxvers(ps: int) -> int | None:
     url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID=8"
     headers = {"User-Agent": "Mozilla/5.0"}
