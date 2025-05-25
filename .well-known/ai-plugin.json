@@ -2,14 +2,17 @@
   "schema_version": "v1",
   "name_for_human": "Bijbelse Pastorale Zorg",
   "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Coaching met psalmen en gereformeerde grondslag",
-  "description_for_model": "Gebruik /api/psalm en /api/psalm/max om berijmde psalmen (1773) op te halen",
-  "auth": { "type": "none" },
-  "api": {
-    "url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/openapi.yaml",
-    "has_user_authentication": false
+  "description_for_human": "Geef me een berijmd psalmvers uit de 1773-berijming",
+  "description_for_model": "Use the get_psalm_vers and get_psalm_max operations to fetch psalm texts.",
+  "auth": {
+    "type": "none"
   },
-  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
-  "contact_email": "support@bijbels-pastoraat-nl.onrender.com",
+  "api": {
+    "type": "openapi",
+    "url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/openapi.yaml",
+    "is_user_authenticated": false
+  },
+  "logo_url": "",
+  "contact_email": "admin@bijbels-pastoraat.nl",
   "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
 }
