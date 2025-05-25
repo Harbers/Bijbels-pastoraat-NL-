@@ -1,17 +1,18 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Bijbels Pastoraat NL",
-  "name_for_model": "bijbels_pastoraat_nl",
-  "description_for_human": "Een backend om de Statenvertaling (Jongbloed) en psalmen (berijming 1773) letterlijk te citeren.",
-  "description_for_model": "Deze plugin haalt 100% letterlijke bijbel- en psalmteksten op voor gebruik in een GPT-omgeving.",
+  "name_for_human": "Bijbelse pastorale zorg",
+  "name_for_model": "bijbels_pastoraat",
+  "description_for_human": "Toegang tot berijmde psalmen (1773-berijming)",
+  "description_for_model": "Plugin voor ophalen van maximaal versnummer en specifieke psalmverzen",
   "auth": {
     "type": "none"
   },
   "api": {
-    "url": "https://bijbels-pastoraat-nl.onrender.com",
+    "type": "openapi",
+    "url": "https://bijbels-pastoraat-nl.onrender.com/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/logo.png",
-  "contact_email": "jouw-email@voorbeeld.nl",
-  "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/legal"
+  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
+  "contact_email": "support@bijbels-pastoraat-nl.onrender.com",
+  "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
 }
