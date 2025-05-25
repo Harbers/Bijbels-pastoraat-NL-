@@ -5,7 +5,7 @@ info:
 
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
-    description: Productie‐server bij Render
+    description: Productie-server bij Render
 
 paths:
   /api/debug/vers:
@@ -87,10 +87,10 @@ components:
           description: Het versnummer
         text:
           type: string
-          description: De exacte tekst van het vers, inclusief originele regelafbrekingen
+          description: De exacte tekst, inclusief originele linebreaks
         bron:
           type: string
-          description: De bron-URL waar het vers vandaan komt
+          description: De bron-URL
 
     Error:
       type: object
