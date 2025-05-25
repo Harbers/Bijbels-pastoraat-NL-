@@ -2,19 +2,17 @@ openapi: 3.1.0
 info:
   title: Bijbelse Psalmen Scraper API
   version: "1.0"
-
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
 
 paths:
   /api/debug/vers:
     get:
-      operationId: getBerijmdPsalmvers
+      operationId: getBerijmdPsalmvers    # MOET precies overeenkomen met je FastAPI functie
       summary: Haal één berijmd psalmvers (1773)
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1-150)
           required: true
           schema:
             type: integer
@@ -22,7 +20,6 @@ paths:
             maximum: 150
         - name: vers
           in: query
-          description: Versnummer (≥ 1)
           required: true
           schema:
             type: integer
@@ -33,24 +30,29 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  psalm:
-                    type: integer
-                    example: 103
-                  vers:
-                    type: integer
-                    example: 8
-                  text:
-                    type: string
-                    example: "Gelijk het gras is ons kortstondig leven…"
+                $ref: '#/components/schemas/PsalmVers'
         '404':
           description: Niet gevonden
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-                    example: "Niet gevonden"
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    PsalmVers:
+      type: object
+      required: [psalm, vers, text]
+      properties:
+        psalm:
+          type: integer
+        vers:
+          type: integer
+        text:
+          type: string
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
