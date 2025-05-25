@@ -5,31 +5,30 @@ info:
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
     description: Productie-server bij Render
-
 paths:
-  /api/debug/vers:
+  /api/psalm:
     get:
-      summary: Haal één berijmd psalmvers (1773) uit meerdere bronnen
-      operationId: get_berijmd_psalmvers
+      summary: Haal één berijmd psalmvers (1773)
+      operationId: get_psalm_vers
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
           required: true
+          description: Psalmnummer (1–150)
           schema:
             type: integer
             minimum: 1
             maximum: 150
         - name: vers
           in: query
-          description: Versnummer binnen die psalm
           required: true
+          description: Versnummer binnen die psalm
           schema:
             type: integer
             minimum: 1
       responses:
         "200":
-          description: Psalmvers gevonden in de 1773-berijming
+          description: Psalmvers gevonden
           content:
             application/json:
               schema:
@@ -48,8 +47,8 @@ paths:
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
           required: true
+          description: Psalmnummer (1–150)
           schema:
             type: integer
             minimum: 1
@@ -58,7 +57,9 @@ paths:
         "200":
           description: Maximaal versnummer
           content:
-            text/plain: {}
+            application/json:
+              schema:
+                type: integer
         "404":
           description: Niet gevonden
           content:
@@ -70,11 +71,7 @@ components:
   schemas:
     PsalmVers:
       type: object
-      required:
-        - psalm
-        - vers
-        - text
-        - bron
+      required: [psalm, vers, text, bron]
       properties:
         psalm:
           type: integer
@@ -84,11 +81,9 @@ components:
           type: string
         bron:
           type: string
-
     Error:
       type: object
-      required:
-        - detail
+      required: [detail]
       properties:
         detail:
           type: string
