@@ -1,14 +1,16 @@
-# … stap 1 & 2 onveranderd …
+FROM python:3.11-slim
+
+# …system deps installeren…
+
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY requirements.txt .
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+ && pip install -r requirements.txt
 
-# zet main.py in /app
-COPY main.py ./
+COPY main.py .
 
-# copy de hele .well-known map (inclusief openapi.yaml & ai-plugin.json)
+# Kopieer nu de hele .well-known map
 COPY .well-known ./.well-known
 
-CMD ["uvicorn","main:app","--host","0.0.0.0","--port","10000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
