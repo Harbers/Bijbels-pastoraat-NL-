@@ -5,6 +5,7 @@ info:
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
 paths:
+
   /api/psalm/max:
     get:
       operationId: get_psalm_max
@@ -24,17 +25,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PsalmMax'
+                type: integer
         "404":
-          description: Niet gevonden
+          description: Psalm niet gevonden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
+
   /api/psalm:
     get:
       operationId: get_psalm_vers
-      summary: Haal één berijmd psalmvers (1773)
+      summary: Haal één berijmd psalmvers op (1773)
       parameters:
         - name: psalm
           in: query
@@ -46,39 +48,34 @@ paths:
             maximum: 150
         - name: vers
           in: query
-          description: Versnummer (≥1)
+          description: Versnummer binnen de psalm
           required: true
           schema:
             type: integer
             minimum: 1
       responses:
         "200":
-          description: Vers gevonden
+          description: Gevonden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PsalmVers'
+                $ref: "#/components/schemas/PsalmVers"
         "404":
-          description: Niet gevonden
+          description: Psalmvers niet gevonden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
-    PsalmMax:
-      type: object
-      required: [psalm, max_vers]
-      properties:
-        psalm:
-          type: integer
-          example: 103
-        max_vers:
-          type: integer
-          example: 11
+
     PsalmVers:
       type: object
-      required: [psalm, vers, text]
+      required:
+        - psalm
+        - vers
+        - text
       properties:
         psalm:
           type: integer
@@ -88,14 +85,13 @@ components:
           example: 8
         text:
           type: string
-          example: |
-            Gelijk het gras is ons kortstondig leven,
-            Gelijk een bloem, die op het veld verheven,
-            …
+          example: "Gelijk het gras is ons kortstondig leven…"
+
     Error:
       type: object
-      required: [detail]
+      required:
+        - detail
       properties:
         detail:
           type: string
-          example: Psalm niet gevonden
+          example: "Psalmvers niet gevonden"
