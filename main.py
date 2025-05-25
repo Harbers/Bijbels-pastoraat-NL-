@@ -1,13 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 import httpx
 from bs4 import BeautifulSoup
 
 app = FastAPI()
 
-### ────────────────────────────────────
-###  Datamodellen
-### ────────────────────────────────────
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -16,113 +13,88 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-### ────────────────────────────────────
-###  Scraping-helpers
-### ────────────────────────────────────
-async def fetch_psalmboek_zingen(ps: int, vs: int):
-    """
-    Bron 1 – psalmboek.nl via de zingen.php-pagina
-    URL-patroon: https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}
-    Deze pagina toont *alle* verzen en geeft het gevraagde vers weer.
-    """
-    url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        return None
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    # daar waar de tekst in een <p> staat direct onder de titel "Psalm X vers Y"
-    # in de praktijk zit dit in een container met class "content" of "page"
-    # we proberen een generieke <p> onder de header te pakken:
-    #  * eerst binnen div.met class "content", zo niet, fallback op eerste <p>
-    container = soup.select_one("div.content") or soup
-    p = container.find("p")
-    return p.get_text(strip=True) if p else None
-
-
-async def fetch_psalmboek_old(ps: int, vs: int):
-    """
-    Bron 2 – psalmboek.nl via de verse-echte URL (werkt soms alleen t/m 7)
-    URL-patroon: https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773
-    """
+### Scrape één vers uit drie bronnen, in volgorde:
+async def fetch_psalmboek(ps: int, vs: int) -> str | None:
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
         return None
     soup = BeautifulSoup(r.text, "html.parser")
-    stanza = soup.select_one("div.verse-text")
-    return stanza.get_text(strip=True) if stanza else None
+    el = soup.select_one("div.verse-text")
+    return el.get_text(strip=True) if el else None
 
-
-async def fetch_onlinebijbel(ps: int, vs: int):
-    """
-    Bron 3 – online-bijbel.nl (1773-berijming)
-    Werkt alleen als we de eerste regel kennen; beperkt.
-    """
-    firstline_map = {
-        # voeg hier per vers de startregel toe
-        8: "Gelijk het gras is ons kortstondig leven",
-        # …
-    }
-    firstline = firstline_map.get(vs)
-    if not firstline:
-        return None
-
+async def fetch_onlinebijbel(ps: int, vs: int) -> str | None:
     url = f"https://www.online-bijbel.nl/psalmen-1773/{ps}"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
-    if r.status_code != 200 or firstline not in r.text:
+    if r.status_code != 200:
         return None
-
-    start = r.text.find(firstline)
+    # eenvoudige tekst-matching op eerste regel van vers
+    # (uit te breiden met dynamische lookup)
+    lookup = {
+        8: "Gelijk het gras is ons kortstondig leven"
+    }.get(vs)
+    if not lookup or lookup not in r.text:
+        return None
+    start = r.text.find(lookup)
     end = r.text.find("<br/>", start)
     return BeautifulSoup(r.text[start:end], "html.parser").get_text(strip=True)
 
-
-async def fetch_reformatorischeomroep(ps: int, vs: int):
-    """
-    Bron 4 – Reformatorische Omroep (plain-text index)
-    URL-patroon: https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt
-    """
+async def fetch_reformatorisch(ps: int, vs: int) -> str | None:
     url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     return r.text.strip() if r.status_code == 200 else None
 
+SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_reformatorisch]
 
-# Prioriteit: eerst de nieuwe zingen.php-scraper, dan de oude, etc.
-SCRAPE_SOURCES = [
-    fetch_psalmboek_zingen,
-    fetch_psalmboek_old,
-    fetch_onlinebijbel,
-    fetch_reformatorischeomroep,
-]
-
-### ────────────────────────────────────
-###  API-route
-### ────────────────────────────────────
 @app.get(
-    "/api/debug/vers",
+    "/api/psalm",
     response_model=PsalmVers,
+    responses={400: {"model": Error}, 404: {"model": Error}},
+)
+async def getPsalmVers(
+    psalm: int = Query(..., ge=1, le=150),
+    vers: int = Query(..., ge=1),
+):
+    # valideer via max-endpoint
+    # (gebruik /api/psalm/max onder de motorkap)
+    # hier optioneel: fetch Psalm Max en raise 400 bij te groot vers
+    # …
+    for fn in SCRAPE_SOURCES:
+        try:
+            text = await fn(psalm, vers)
+            if text:
+                return PsalmVers(psalm=psalm, vers=vers, text=text)
+        except Exception:
+            continue
+    raise HTTPException(status_code=404, detail="Psalmvers niet gevonden")
+
+@app.get(
+    "/api/psalm/max",
+    response_model=dict,
     responses={404: {"model": Error}},
 )
-async def get_berijmd_psalmvers(psalm: int, vers: int):
-    """
-    Zoekt het gevraagde vers (in de 1773-berijming) achtereenvolgens
-    in vier openbare bronnen. Zodra er één iets oplevert, stoppen we.
-    """
-    for scraper in SCRAPE_SOURCES:
+async def getPsalmMax(
+    psalm: int = Query(..., ge=1, le=150),
+):
+    # scrape hoofdstuk-index op psalmboek.nl
+    url = f"https://psalmboek.nl/psalm/{psalm:03d}?berijming=1773"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    if r.status_code != 200:
+        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+    soup = BeautifulSoup(r.text, "html.parser")
+    # links naar elk vers bevatten “/vers/NN”
+    verses = []
+    for a in soup.select("div.chapter-list a[href*='/vers/']"):
+        href = a["href"]
         try:
-            if (tekst := await scraper(psalm, vers)):
-                return PsalmVers(psalm=psalm, vers=vers, text=tekst)
-        except Exception:
-            # bron onbereikbaar → probeer de volgende
+            num = int(href.split("/vers/")[-1].split("?")[0])
+            verses.append(num)
+        except ValueError:
             continue
-
-    # niets gevonden
-    raise HTTPException(
-        status_code=404,
-        detail=f"Psalm {psalm}:{vers} niet gevonden in de 1773-berijming"
-    )
+    if not verses:
+        raise HTTPException(status_code=404, detail="Geen verzen gevonden")
+    return {"psalm": psalm, "max_vers": max(verses)}
