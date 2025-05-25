@@ -1,20 +1,17 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from bs4 import BeautifulSoup
 
-app = FastAPI(
-    title="Bijbelse Psalmen API",
-    version="1.0",
-    description="Haal psalmverzen op uit de berijming van 1773 en bepaal automatisch het maximale aantal verzen per psalm."
-)
+app = FastAPI()
 
-# Serveer alles in .well-known (openapi.yaml, ai-plugin.json, icon.png, etc.)
+# 3) Static-mount zodat OpenAPI en ai-plugin.json geserveerd worden
+#    na deploy is nu beschikbaar onder https://<jouw-host>/.well-known/...
 app.mount(
     "/.well-known",
     StaticFiles(directory=".well-known", html=False),
-    name="well-known",
+    name="well-known"
 )
 
 class PsalmVers(BaseModel):
@@ -25,8 +22,7 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-# --- scrapers voor vers‐tekst ---
-async def fetch_psalmboek(ps: int, vs: int) -> str | None:
+async def fetch_psalmboek(ps, vs):
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
@@ -36,8 +32,8 @@ async def fetch_psalmboek(ps: int, vs: int) -> str | None:
     node = soup.select_one("div.verse-text")
     return node.get_text(strip=True) if node else None
 
-async def fetch_onlinebijbel(ps: int, vs: int) -> str | None:
-    # voorbeeld‐implementatie, alleen enkele eerste regels
+async def fetch_onlinebijbel(ps, vs):
+    # Voorbeeld: alleen een paar eerste regels / breid uit naar behoefte
     firstlines = {
         8: "Gelijk het gras is ons kortstondig leven"
     }
@@ -53,7 +49,7 @@ async def fetch_onlinebijbel(ps: int, vs: int) -> str | None:
     end = r.text.find("<br/>", start)
     return BeautifulSoup(r.text[start:end], "html.parser").get_text(strip=True)
 
-async def fetch_ro(ps: int, vs: int) -> str | None:
+async def fetch_ro(ps, vs):
     url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
@@ -61,64 +57,34 @@ async def fetch_ro(ps: int, vs: int) -> str | None:
 
 SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
 
-
-# --- endpoint: één vers opvragen ---
 @app.get(
     "/api/psalm",
     response_model=PsalmVers,
-    responses={404: {"model": Error}},
+    responses={"404": {"model": Error}},
     operation_id="get_psalm_vers",
     summary="Haal één berijmd psalmvers (1773)"
 )
-async def get_psalm_vers(
-    psalm: int = Query(..., ge=1, le=150, description="Psalmnummer (1–150)"),
-    vers: int  = Query(..., ge=1, description="Versnummer")
-):
-    # probeer elk van de scrapers
-    for scraper in SCRAPE_SOURCES:
+async def get_psalm_vers(psalm: int, vers: int):
+    for fn in SCRAPE_SOURCES:
         try:
-            txt = await scraper(psalm, vers)
+            txt = await fn(psalm, vers)
             if txt:
                 return PsalmVers(psalm=psalm, vers=vers, text=txt)
-        except Exception:
+        except:
             continue
+    raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
 
-    raise HTTPException(
-        status_code=404,
-        detail="Psalmvers niet gevonden in 1773-berijming"
-    )
-
-
-# --- endpoint: maximaal versnummer dynamisch bepalen ---
 @app.get(
     "/api/psalm/max",
     response_model=int,
-    responses={404: {"model": Error}},
+    responses={"404": {"model": Error}},
     operation_id="get_psalm_max",
     summary="Geef maximaal versnummer in 1773-berijming"
 )
-async def get_psalm_max(
-    psalm: int = Query(..., ge=1, le=150, description="Psalmnummer (1–150)")
-) -> int:
-    """
-    Haal de zinge‐pagina op en tel het aantal <option> in de <select id="psvID">.
-    Dat is precies het aantal verzen.
-    """
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    sel = soup.find("select", id="psvID")
-    if not sel:
-        raise HTTPException(status_code=404, detail="Psalm niet gevonden (geen psvID-selector)")
-
-    # Tel alleen de numerieke opties
-    options = sel.find_all("option")
-    numeric_opts = [opt for opt in options if opt.get("value", "").isdigit()]
-    if not numeric_opts:
-        raise HTTPException(status_code=404, detail="Geen versnummers gevonden")
-
-    return len(numeric_opts)
+async def get_psalm_max(psalm: int):
+    # TODO: automatisch scrapen (https://psalmboek.nl/zingen.php?psalm=<n>&psvID=8)
+    max_vers = {103: 11, 42: 5, 89: 1, 32: 2}
+    mv = max_vers.get(psalm)
+    if mv is not None:
+        return mv
+    raise HTTPException(status_code=404, detail="Psalm niet gevonden")
