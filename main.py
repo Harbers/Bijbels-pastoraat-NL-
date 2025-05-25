@@ -5,9 +5,6 @@ from bs4 import BeautifulSoup
 
 app = FastAPI()
 
-### ────────────────────────────────────
-###  Datamodellen
-### ────────────────────────────────────
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -16,9 +13,6 @@ class PsalmVers(BaseModel):
 class Error(BaseModel):
     detail: str
 
-### ────────────────────────────────────
-###  Scraping-helpers
-### ────────────────────────────────────
 async def fetch_psalmboek(ps, vs):
     url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -30,11 +24,7 @@ async def fetch_psalmboek(ps, vs):
     return stanza.get_text(strip=True) if stanza else None
 
 async def fetch_onlinebijbel(ps, vs):
-    firstlines = {
-        # voeg hier voor versnummer eerstelijnen in per psalm; of haal dynamisch op
-        8: "Gelijk het gras is ons kortstondig leven",
-        # …
-    }
+    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}  # breid uit
     firstline = firstlines.get(vs)
     if not firstline:
         return None
@@ -55,9 +45,6 @@ async def fetch_ro(ps, vs):
 
 SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
 
-### ────────────────────────────────────
-###  API-routes
-### ────────────────────────────────────
 @app.get(
     "/api/psalm",
     response_model=PsalmVers,
@@ -66,7 +53,6 @@ SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
     summary="Haal één berijmd psalmvers (1773)"
 )
 async def get_psalm_vers(psalm: int, vers: int):
-    # probeer alle bronnen
     for fn in SCRAPE_SOURCES:
         try:
             txt = await fn(psalm, vers)
@@ -84,13 +70,7 @@ async def get_psalm_vers(psalm: int, vers: int):
     summary="Geef maximaal versnummer in 1773-berijming"
 )
 async def get_psalm_max(psalm: int):
-    # hard-coded of uit database; hier eenvoudig via Psalmboek.nl tellen
-    # (in jouw implementatie kun je dynamisch scrapen of een map aanleggen)
-    # Voorbeeld: Psalm 103 heeft 11 verzen
-    max_vers = {
-        103: 11,
-        # … vul voor alle 150 psalmen aan …
-    }.get(psalm)
-    if max_vers:
-        return max_vers
+    max_vers = {103: 11}  # vul verder aan voor alle psalmen
+    if max_vers.get(psalm):
+        return max_vers[psalm]
     raise HTTPException(status_code=404, detail="Psalm niet gevonden")
