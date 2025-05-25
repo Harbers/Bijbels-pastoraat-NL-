@@ -13,6 +13,7 @@ class PsalmVers(BaseModel):
     psalm: int
     vers: int
     text: str
+    bron: str
 
 class Error(BaseModel):
     detail: str
@@ -64,10 +65,10 @@ async def fetch_reformatorischeomroep(ps: int, vs: int):
     return r.text.strip() if r.status_code == 200 else None
 
 SCRAPE_SOURCES = [
-    fetch_psalmboek_zingen,
-    fetch_psalmboek_old,
-    fetch_onlinebijbel,
-    fetch_reformatorischeomroep,
+    (fetch_psalmboek_zingen, "psalmboek.nl/zingen.php"),
+    (fetch_psalmboek_old, "psalmboek.nl/psalm/..."),
+    (fetch_onlinebijbel, "online-bijbel.nl"),
+    (fetch_reformatorischeomroep, "reformatorischeomroep.nl"),
 ]
 
 ### ────────────────────────────────────
@@ -79,10 +80,11 @@ SCRAPE_SOURCES = [
     responses={404: {"model": Error}},
 )
 async def get_berijmd_psalmvers(psalm: int, vers: int):
-    for scraper in SCRAPE_SOURCES:
+    for scraper, bronnaam in SCRAPE_SOURCES:
         try:
-            if (tekst := await scraper(psalm, vers)):
-                return PsalmVers(psalm=psalm, vers=vers, text=tekst)
+            tekst = await scraper(psalm, vers)
+            if tekst:
+                return PsalmVers(psalm=psalm, vers=vers, text=tekst, bron=bronnaam)
         except Exception:
             continue
     raise HTTPException(
