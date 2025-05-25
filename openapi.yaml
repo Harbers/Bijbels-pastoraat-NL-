@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
-  title: Bijbelse Psalmen Scraper API
+  title: Bijbelse Psalm Scraper API
   version: "1.0"
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
 paths:
   /api/psalm/max:
     get:
-      operationId: get_psalm_max
+      operationId: getPsalmMax
       summary: Geef maximaal versnummer in 1773-berijming
       parameters:
         - name: psalm
@@ -23,22 +23,30 @@ paths:
           description: Maximaal versnummer
           content:
             application/json:
-              schema: { type: integer }
+              schema:
+                type: object
+                properties:
+                  psalm:
+                    type: integer
+                  max_vers:
+                    type: integer
         "404":
-          description: Niet gevonden
+          description: Psalm niet gevonden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                type: object
+                properties:
+                  detail:
+                    type: string
 
   /api/psalm:
     get:
-      operationId: get_psalm_vers
-      summary: Haal één berijmd psalmvers (1773)
+      operationId: getPsalmVers
+      summary: Haal één berijmd psalmvers (psalmboek.nl)
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
           required: true
           schema:
             type: integer
@@ -46,39 +54,39 @@ paths:
             maximum: 150
         - name: vers
           in: query
-          description: Versnummer binnen de psalm
           required: true
           schema:
             type: integer
+            minimum: 1
       responses:
         "200":
           description: Psalmvers gevonden
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PsalmVers"
-        "404":
-          description: Psalmvers niet gevonden
+                type: object
+                properties:
+                  psalm:
+                    type: integer
+                  vers:
+                    type: integer
+                  tekst:
+                    type: string
+        "400":
+          description: Vers bestaat niet
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-
-components:
-  schemas:
-    PsalmVers:
-      type: object
-      required: [psalm, vers, text]
-      properties:
-        psalm:
-          type: integer
-        vers:
-          type: integer
-        text:
-          type: string
-    Error:
-      type: object
-      required: [detail]
-      properties:
-        detail:
-          type: string
+                type: object
+                properties:
+                  detail:
+                    type: string
+        "404":
+          description: Psalm of vers niet gevonden
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
