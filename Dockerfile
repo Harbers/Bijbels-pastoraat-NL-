@@ -1,15 +1,19 @@
 FROM python:3.11-slim
 
-RUN apt-get update && apt-get install -y wget unzip chromium && rm -rf /var/lib/apt/lists/*
-
+# ---- 1) werkdirectory instellen
 WORKDIR /app
 
+# ---- 2) Python dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-COPY main.py openapi.yaml ai-plugin.json ./
-# eventueel .well-known/logo.png kopiëren
-COPY .well-known ./ ./.well-known/
+# ---- 3) app-code en plugin manifest
+COPY main.py openapi.yaml ./
+COPY .well-known ./.well-known
 
+# (optioneel) expose de poort waarop Uvicorn draait
+EXPOSE 10000
+
+# ---- 4) start commando
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
