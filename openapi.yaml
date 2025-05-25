@@ -5,16 +5,14 @@ info:
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
     description: Productie-server bij Render
-
 paths:
   /api/psalm:
     get:
-      summary: Haal één berijmd psalmvers (1773)
+      summary: Haal één berijmd psalmvers (1773) op uit meerdere bronnen
       operationId: get_psalm_vers
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
           required: true
           schema:
             type: integer
@@ -22,33 +20,30 @@ paths:
             maximum: 150
         - name: vers
           in: query
-          description: Versnummer
           required: true
           schema:
             type: integer
             minimum: 1
       responses:
         "200":
-          description: Psalmvers gevonden
+          description: Psalmvers gevonden in de 1773-berijming
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmVers"
         "404":
-          description: Niet gevonden
+          description: Vers niet opgehaald
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
   /api/psalm/max:
     get:
-      summary: Geef maximaal versnummer in 1773-berijming
+      summary: Bepaal maximaal versnummer voor een psalm
       operationId: get_psalm_max
       parameters:
         - name: psalm
           in: query
-          description: Psalmnummer (1–150)
           required: true
           schema:
             type: integer
@@ -56,16 +51,17 @@ paths:
             maximum: 150
       responses:
         "200":
-          description: Maximaal versnummer
+          description: Max versnummer
           content:
-            text/plain: {}
+            application/json:
+              schema:
+                type: integer
         "404":
-          description: Niet gevonden
+          description: Psalm niet gevonden of geen verzen
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
 components:
   schemas:
     PsalmVers:
@@ -74,6 +70,7 @@ components:
         - psalm
         - vers
         - text
+        - bron
       properties:
         psalm:
           type: integer
