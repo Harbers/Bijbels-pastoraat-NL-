@@ -1,24 +1,14 @@
-# 1) basis
-FROM python:3.11-slim
-
-# 2) systeem-tools
-RUN apt-get update && apt-get install -y \
-      wget \
-      unzip \
-      chromium \
-    && rm -rf /var/lib/apt/lists/*
-
-# 3) werkdir
+# … stap 1 & 2 onveranderd …
 WORKDIR /app
 
-# 4) Python-dependencies
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --upgrade pip \
- && pip install -r requirements.txt
+    && pip install -r requirements.txt
 
-# 5) copy alle code + OpenAPI + plugin-manifest
-#    (.well-known bevat ai-plugin.json + eventueel icon/logo)
-COPY . .
+# zet main.py in /app
+COPY main.py ./
 
-# 6) run de FastAPI app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+# copy de hele .well-known map (inclusief openapi.yaml & ai-plugin.json)
+COPY .well-known ./.well-known
+
+CMD ["uvicorn","main:app","--host","0.0.0.0","--port","10000"]
