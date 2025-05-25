@@ -1,17 +1,9 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from bs4 import BeautifulSoup
 
 app = FastAPI()
-
-# exposeer .well-known voor plugin manifest & spec
-app.mount(
-    "/.well-known",
-    StaticFiles(directory=".well-known", html=False),
-    name="well-known"
-)
 
 class PsalmVers(BaseModel):
     psalm: int
@@ -32,10 +24,7 @@ async def fetch_psalmboek(ps, vs):
     return node.get_text(strip=True) if node else None
 
 async def fetch_onlinebijbel(ps, vs):
-    # eerste regel-mapping uitbreiden waar nodig
-    firstlines = {
-        8: "Gelijk het gras is ons kortstondig leven"
-    }
+    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}  # breid uit voor meer vers-regels
     first = firstlines.get(vs)
     if not first:
         return None
@@ -59,11 +48,12 @@ SCRAPE_SOURCES = [fetch_psalmboek, fetch_onlinebijbel, fetch_ro]
 @app.get(
     "/api/psalm",
     response_model=PsalmVers,
-    responses={"404": {"model": Error}},
+    responses={404: {"model": Error}},
     operation_id="get_psalm_vers",
     summary="Haal één berijmd psalmvers (1773)"
 )
 async def get_psalm_vers(psalm: int, vers: int):
+    # probeer elke scraper op volgorde
     for fn in SCRAPE_SOURCES:
         try:
             txt = await fn(psalm, vers)
@@ -76,13 +66,21 @@ async def get_psalm_vers(psalm: int, vers: int):
 @app.get(
     "/api/psalm/max",
     response_model=int,
-    responses={"404": {"model": Error}},
+    responses={404: {"model": Error}},
     operation_id="get_psalm_max",
     summary="Geef maximaal versnummer in 1773-berijming"
 )
 async def get_psalm_max(psalm: int):
-    max_vers = {103: 11, 42: 5, 89: 1, 32: 2}  # breid aan waar nodig
-    mv = max_vers.get(psalm)
-    if mv is not None:
-        return mv
-    raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+    """
+    Scrape de volledige psalm-pagina en tel het aantal <div class="verse-text"> elementen.
+    """
+    url = f"https://psalmboek.nl/psalm/{psalm:03d}?berijming=1773"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    if r.status_code != 200:
+        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+    soup = BeautifulSoup(r.text, "html.parser")
+    verses = soup.select("div.verse-text")
+    if not verses:
+        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+    return len(verses)
