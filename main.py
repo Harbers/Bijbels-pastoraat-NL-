@@ -20,20 +20,21 @@ async def fetch_psalmboek(ps, vs):
     if r.status_code != 200:
         return None
     soup = BeautifulSoup(r.text, "html.parser")
-    stanza = soup.select_one("div.verse-text")
-    return stanza.get_text(strip=True) if stanza else None
+    node = soup.select_one("div.verse-text")
+    return node.get_text(strip=True) if node else None
 
 async def fetch_onlinebijbel(ps, vs):
-    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}  # breid uit
-    firstline = firstlines.get(vs)
-    if not firstline:
+    # alleen voorbeeld, breid uit voor extra versregels
+    firstlines = {8: "Gelijk het gras is ons kortstondig leven"}
+    first = firstlines.get(vs)
+    if not first:
         return None
     url = f"https://www.online-bijbel.nl/psalmen-1773/{ps}"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
-    if r.status_code != 200 or firstline not in r.text:
+    if r.status_code != 200 or first not in r.text:
         return None
-    start = r.text.find(firstline)
+    start = r.text.find(first)
     end = r.text.find("<br/>", start)
     return BeautifulSoup(r.text[start:end], "html.parser").get_text(strip=True)
 
@@ -58,7 +59,7 @@ async def get_psalm_vers(psalm: int, vers: int):
             txt = await fn(psalm, vers)
             if txt:
                 return PsalmVers(psalm=psalm, vers=vers, text=txt)
-        except Exception:
+        except:
             continue
     raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
 
@@ -70,7 +71,9 @@ async def get_psalm_vers(psalm: int, vers: int):
     summary="Geef maximaal versnummer in 1773-berijming"
 )
 async def get_psalm_max(psalm: int):
-    max_vers = {103: 11}  # vul verder aan voor alle psalmen
-    if max_vers.get(psalm):
-        return max_vers[psalm]
+    # vul alle psalmen in t.z.t. aan
+    max_vers = {103: 11, 42: 5, 89: 1, 32: 2}
+    mv = max_vers.get(psalm)
+    if mv is not None:
+        return mv
     raise HTTPException(status_code=404, detail="Psalm niet gevonden")
