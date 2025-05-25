@@ -8,12 +8,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --upgrade pip \
  && pip install -r requirements.txt
 
-COPY main.py .
-# kopieer openapi+plugin én álle .well-known bestanden
-COPY .well-known/ ./.well-known/
+COPY main.py openapi.yaml ./.well-known/ai-plugin.json ./.well-known/
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
