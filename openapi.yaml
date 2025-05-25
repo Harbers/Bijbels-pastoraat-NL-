@@ -23,8 +23,7 @@ paths:
           description: Maximaal versnummer
           content:
             application/json:
-              schema:
-                type: integer
+              schema: { type: integer }
         "404":
           description: Niet gevonden
           content:
