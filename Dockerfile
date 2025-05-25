@@ -1,24 +1,23 @@
 FROM python:3.11-slim
 
-# 1) Install systeem‐dependencies
-RUN apt-get update && apt-get install -y \
-      wget \
-      unzip \
-      chromium \
-    && rm -rf /var/lib/apt/lists/*
+# 1) Installeer systeem‐dependencies
+RUN apt-get update \
+ && apt-get install -y wget unzip chromium \
+ && rm -rf /var/lib/apt/lists/*
 
+# 2) Zet de werkdirectory
 WORKDIR /app
 
-# 2) Installeer Python‐requirements
-COPY requirements.txt ./
+# 3) Installeer de Python‐requirements
+COPY requirements.txt .
 RUN pip install --upgrade pip \
  && pip install -r requirements.txt
 
-# 3) Kopieer applicatie‐code + OpenAPI‐spec + plugin‐config
-COPY main.py openapi.yaml ./.well-known/ai-plugin.json ./
+# 4) Kopieer de app‐code en OpenAPI‐spec
+COPY main.py openapi.yaml ./
 
-# Als je nog andere .well-known‐bestanden hebt (bijv. icon, etc):
-# COPY .well-known ./ ./.well-known/
+# 5) Kopieer de hele .well-known map (inclusief ai-plugin.json en logo’s e.d.)
+COPY .well-known ./ .well-known
 
-# 4) Start de app
+# 6) Start de applicatie
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
