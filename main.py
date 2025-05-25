@@ -1,21 +1,36 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 from bs4 import BeautifulSoup
 
 app = FastAPI(
     title="Bijbelse Psalmen Scraper API",
-    openapi_url="/openapi.yaml"
+    openapi_url="/openapi.yaml",
+    docs_url=None,
+    redoc_url=None
+)
+
+# 1) Serveer alleen de plugin-manifest (en evt. logo) onder /.well-known
+app.mount(
+    "/.well-known",
+    StaticFiles(directory=".well-known", html=False),
+    name="well-known"
+)
+
+# 2) (optioneel) logo serve
+app.mount("/logo.png", StaticFiles(directory=".", html=False), name="logo")
+
+# 3) CORS als ChatGPT dat eist
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 ### ────────────────────────────────────
-### Datamodellen
-### ────────────────────────────────────
-class PsalmMax(BaseModel):
-    psalm: int
-    max_vers: int
-
 class PsalmVers(BaseModel):
     psalm: int
     vers: int
@@ -25,65 +40,57 @@ class Error(BaseModel):
     detail: str
 
 ### ────────────────────────────────────
-### OpenAPI & Plugin manifest endpoints
-### ────────────────────────────────────
-@app.get("/openapi.yaml", include_in_schema=False)
-async def openapi_spec():
-    return FileResponse("openapi.yaml")
-
-@app.get("/ai-plugin.json", include_in_schema=False)
-async def plugin_manifest():
-    return FileResponse("ai-plugin.json")
-
-### ────────────────────────────────────
-###  Helper: bepaal max vers
-### ────────────────────────────────────
-@app.get(
-    "/api/psalm/max",
-    response_model=PsalmMax,
-    responses={404: {"model": Error}},
-    summary="Geef maximaal versnummer in 1773-berijming",
-)
-async def get_psalm_max(psalm: int):
-    url = f"https://psalmboek.nl/psalm/{psalm:03d}"
+# Scrapers (kopieer hier je werkende helpers)
+async def fetch_psalmboek(ps, vs):
+    url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}&berijming=1773"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(url)
     if r.status_code != 200:
-        raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+        return None
     soup = BeautifulSoup(r.text, "html.parser")
-    # de vers-buttons staan in <nav class="versen"> als <a> met tekst=nr
-    links = soup.select("nav.versen a")
-    verses = [int(a.text) for a in links if a.text.isdigit()]
-    if not verses:
-        raise HTTPException(status_code=404, detail="Geen versregister gevonden")
-    return PsalmMax(psalm=psalm, max_vers=max(verses))
+    # elk regel is <p class="verse"> of zo; pas selector aan
+    lines = [p.get_text(strip=True) for p in soup.select("div.verse-text p")]
+    return "\n".join(lines) if lines else None
+
+async def fetch_ro(ps, vs):
+    url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url)
+    return r.text.strip() if r.status_code == 200 else None
+
+SCRAPE_SOURCES = [fetch_psalmboek, fetch_ro]
 
 ### ────────────────────────────────────
-###  Helper: haal vers op
-### ────────────────────────────────────
-@app.get(
-    "/api/psalm",
-    response_model=PsalmVers,
-    responses={404: {"model": Error}},
-    summary="Haal één berijmd psalmvers (1773)",
-)
+@app.get("/api/psalm/max", response_model=int, responses={404: {"model": Error}})
+async def get_psalm_max(psalm: int):
+    # eenvoudige fallbacklijst of bereken via onlinebron
+    # bijvoorbeeld Reformatorische Omroep index: psalmboek.nl toont tot 11 voor psalm 103
+    # Hier hardcode als voorbeeld:
+    dummy_max = {103: 11}
+    if psalm in dummy_max:
+        return dummy_max[psalm]
+    raise HTTPException(status_code=404, detail="Psalm niet gevonden")
+
+@app.get("/api/psalm", response_model=PsalmVers, responses={404: {"model": Error}})
 async def get_psalm_vers(psalm: int, vers: int):
-    # valideer eerst tegen het max-vers endpoint
-    max_data = await get_psalm_max(psalm)
-    if vers < 1 or vers > max_data.max_vers:
+    # 1) check max
+    max_vers = await get_psalm_max(psalm)
+    if vers < 1 or vers > max_vers:
         raise HTTPException(
             status_code=404,
-            detail=f"Vers {vers} bestaat niet (max is {max_data.max_vers})"
+            detail=f"Psalm {psalm}:{vers} bestaat niet (max is {max_vers})"
         )
-    url = f"https://psalmboek.nl/psalm/{psalm:03d}/vers/{vers:02d}?berijming=1773"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        raise HTTPException(status_code=404, detail="Psalmvers niet gevonden")
-    soup = BeautifulSoup(r.text, "html.parser")
-    stanza = soup.select_one("div.verse-text")
-    if not stanza:
-        raise HTTPException(status_code=404, detail="Tekst niet gevonden")
-    # behoud originele linebreaks
-    text = "\n".join(line.strip() for line in stanza.get_text("\n").splitlines() if line.strip())
-    return PsalmVers(psalm=psalm, vers=vers, text=text)
+    # 2) probeer elke bron
+    for fetch in SCRAPE_SOURCES:
+        try:
+            txt = await fetch(psalm, vers)
+            if txt:
+                return PsalmVers(psalm=psalm, vers=vers, text=txt)
+        except:
+            pass
+    raise HTTPException(status_code=404, detail="Psalmvers niet gevonden in 1773-berijming")
+
+# serveer OpenAPI spec
+@app.get("/openapi.yaml", include_in_schema=False)
+async def openapi_spec():
+    return StaticFiles(directory=".", html=False)
