@@ -5,7 +5,7 @@ info:
 
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
-    description: Productie-server bij Render
+    description: Productie‐server bij Render
 
 paths:
   /api/debug/vers:
@@ -90,7 +90,7 @@ components:
           description: De exacte tekst van het vers, inclusief originele regelafbrekingen
         bron:
           type: string
-          description: De bron-URL of site waarvandaan het vers is gescraped
+          description: De bron-URL waar het vers vandaan komt
 
     Error:
       type: object
@@ -99,4 +99,4 @@ components:
       properties:
         detail:
           type: string
-          description: Uitleg van de fout
+          description: Uitleg van de foutmelding
