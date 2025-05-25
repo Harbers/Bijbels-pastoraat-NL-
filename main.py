@@ -1,52 +1,37 @@
-
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from bs4 import BeautifulSoup
-import requests
 
 app = FastAPI()
 
-origins = ["*"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def scrape_psalmboek(psalm, vers):
+    # TODO: Voeg echte scraping-code toe voor psalmboek.nl
+    # Voorbeeld dummy return:
+    if psalm == 103 and vers == 8:
+        return "Gelijk het gras is ons kortstondig leven, Gelijk een bloem, die op het veld verheven, ..."
+    return None
 
-def extract_vers_psalmboek(psalm: int, vers: int) -> str:
-    print(f"[extract_vers_psalmboek] Opvragen vers voor Psalm {psalm}, vers {vers}")
-    url = f"https://psalmboek.nl/psalm/{psalm}/{vers}"
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"[extract_vers_psalmboek] Fout bij ophalen pagina: {e}")
-        return "Fout bij ophalen pagina"
+def scrape_liturgie(psalm, vers):
+    # TODO: Voeg echte scraping-code toe voor liturgie.nu
+    return None
 
-    html = response.text
-    print(f"[extract_vers_psalmboek] Eerste 500 tekens HTML: {html[:500]}")
-    soup = BeautifulSoup(html, "html.parser")
-    blok = soup.find(id="psvs")
-    if blok is None:
-        print("[extract_vers_psalmboek] ID 'psvs' niet gevonden in HTML")
-        return "Geen vers gevonden - container ontbreekt"
+def scrape_bijbelbox(psalm, vers):
+    # TODO: Voeg echte scraping-code toe voor bijbelbox.nl
+    return None
 
-    tekst = blok.get_text(strip=True)
-    print(f"[extract_vers_psalmboek] Gevonden tekst: {tekst}")
-    return tekst or "Vers bestaat mogelijk niet"
+def zoek_berijmd_vers(psalm, vers):
+    tekst = scrape_psalmboek(psalm, vers)
+    if tekst:
+        return tekst, "psalmboek.nl"
+    tekst = scrape_liturgie(psalm, vers)
+    if tekst:
+        return tekst, "liturgie.nu"
+    tekst = scrape_bijbelbox(psalm, vers)
+    if tekst:
+        return tekst, "bijbelbox.nl"
+    return None, None
 
 @app.get("/psalm")
-def get_psalm_text(psalm: int, vers: int, hash: str = None):
-    tekst = extract_vers_psalmboek(psalm, vers)
-    if not tekst or "Fout" in tekst or "geen" in tekst.lower():
-        raise HTTPException(status_code=404, detail="Vers niet gevonden")
-    return {"text": tekst}
-
-@app.get("/debug/vers")
-def debug_vers(psalm: int, vers: int):
-    tekst = extract_vers_psalmboek(psalm, vers)
-    if not tekst:
-        raise HTTPException(status_code=404, detail="Vers niet gevonden")
-    return {"tekst": tekst}
+def get_psalm_text(psalm: int, vers: int):
+    tekst, bron = zoek_berijmd_vers(psalm, vers)
+    if tekst:
+        return {"text": tekst, "bron": bron}
+    raise HTTPException(status_code=404, detail="Vers niet gevonden bij de drie externe bronnen.")
