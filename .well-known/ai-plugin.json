@@ -2,9 +2,11 @@
   "schema_version": "v1",
   "name_for_human": "Bijbelse Psalmen",
   "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Haal exacte verzen uit de 1773-berijming via psalmboek.nl",
-  "description_for_model": "Gebruik get_psalm_max en get_berijmd_psalmvers om berijmde Psalmverzen (1773) op te halen; geen parafrases.",
-  "auth": { "type": "none" },
+  "description_for_human": "Haal berijmde psalmverzen (1773) via psalmboek.nl",
+  "description_for_model": "Gebruik de endpoints get_psalm_max en get_berijmd_psalmvers voor de 1773-berijming",
+  "auth": {
+    "type": "none"
+  },
   "api": {
     "type": "openapi",
     "url": "https://bijbels-pastoraat-nl.onrender.com/openapi.yaml",
@@ -12,6 +14,6 @@
     "function_calling": "only"
   },
   "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
-  "contact_email": "hans.harbers@solcon.nl",
+  "contact_email": "support@bijbels-pastoraat-nl.onrender.com",
   "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
 }
