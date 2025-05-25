@@ -5,7 +5,6 @@ info:
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
 paths:
-
   /api/psalm/max:
     get:
       operationId: get_psalm_max
@@ -27,7 +26,7 @@ paths:
               schema:
                 type: integer
         "404":
-          description: Psalm niet gevonden
+          description: Niet gevonden
           content:
             application/json:
               schema:
@@ -36,7 +35,7 @@ paths:
   /api/psalm:
     get:
       operationId: get_psalm_vers
-      summary: Haal één berijmd psalmvers op (1773)
+      summary: Haal één berijmd psalmvers (1773)
       parameters:
         - name: psalm
           in: query
@@ -52,10 +51,9 @@ paths:
           required: true
           schema:
             type: integer
-            minimum: 1
       responses:
         "200":
-          description: Gevonden
+          description: Psalmvers gevonden
           content:
             application/json:
               schema:
@@ -69,29 +67,19 @@ paths:
 
 components:
   schemas:
-
     PsalmVers:
       type: object
-      required:
-        - psalm
-        - vers
-        - text
+      required: [psalm, vers, text]
       properties:
         psalm:
           type: integer
-          example: 103
         vers:
           type: integer
-          example: 8
         text:
           type: string
-          example: "Gelijk het gras is ons kortstondig leven…"
-
     Error:
       type: object
-      required:
-        - detail
+      required: [detail]
       properties:
         detail:
           type: string
-          example: "Psalmvers niet gevonden"
