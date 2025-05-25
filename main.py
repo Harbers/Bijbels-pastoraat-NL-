@@ -36,15 +36,24 @@ class Error(BaseModel):
 
 # Helper: fetch max vers
 async def fetch_max(ps: int) -> int | None:
-    url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID=8"
-    async with httpx.AsyncClient(timeout=10) as client:
+    """
+    Bepaalt maximaal versnummer via psalmboek.nl zonder psvID, 1773 berijming.
+    """
+    url = f"https://psalmboek.nl/zingen.php?psalm={ps}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    async with httpx.AsyncClient(timeout=10, headers=headers) as client:
         r = await client.get(url)
     if r.status_code != 200:
         return None
     soup = BeautifulSoup(r.text, "html.parser")
+    # dropdown <select name="vers"> opties
     opts = soup.select("select[name=vers] option")
-    vals = [o.get("value") for o in opts if o.get("value", "").isdigit()]
-    return max(map(int, vals)) if vals else None
+    # bewaart digitaren values
+    waarden = [o.get("value") for o in opts if o.get("value", "").isdigit()]
+    if not waarden:
+        return None
+    # return hoogste
+    return max(int(v) for v in waarden)(int, vals)) if vals else None
 
 # Scrapers
 async def fetch_zingen(ps: int, vs: int):
