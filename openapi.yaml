@@ -1,8 +1,9 @@
 openapi: 3.1.0
 info:
-  title: "Backend API voor Bijbelteksten en Psalmen"
-  version: "1.0"
-  description: "API voor het ophalen van bijbelteksten (Statenvertaling, Jongbloed-editie) en psalmen, zowel berijmd als onberijmd, via externe bronnen."
+  title: "Bijbelse Psalmen API (met externe fallback)"
+  version: "1.1"
+  description: >
+    API voor het ophalen van berijmde psalmverzen (1773), met fallback-opties naar Psalmboek.nl, Liturgie.nu en Bijbelbox.nl indien lokaal niet gevonden.
 
 servers:
   - url: https://bijbels-pastoraat-nl.onrender.com
@@ -10,8 +11,8 @@ servers:
 paths:
   /psalm:
     get:
-      summary: "Haal een specifiek psalmvers op"
-      operationId: getPsalmText
+      summary: "Haal een (berijmd) psalmvers op"
+      operationId: get_psalm_text
       parameters:
         - name: psalm
           in: query
@@ -20,197 +21,53 @@ paths:
             type: integer
             minimum: 1
             maximum: 150
-          description: "Het nummer van de gewenste psalm (1 t/m 150)."
+          description: "Het psalmnummer (1-150)."
         - name: vers
           in: query
           required: true
           schema:
             type: integer
             minimum: 1
-          description: "Het nummer van het gewenste vers (beginnend bij 1)."
-        - name: berijmd
-          in: query
-          required: false
-          schema:
-            type: boolean
-          description: "Indien 'true', wordt gezocht naar de berijmde versie (1773); standaard onberijmd."
+          description: "Het gewenste versnummer."
         - name: hash
           in: query
           required: false
           schema:
             type: string
-          description: "Optioneel anker (hash) voor identificatie."
+          description: "Optioneel anker (hash)."
       responses:
         '200':
-          description: "De opgevraagde psalmtekst."
+          description: "De opgevraagde berijmde psalmtekst."
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  text:
-                    type: string
-                  psalm:
-                    type: integer
-                  vers:
-                    type: integer
-                  berijmd:
-                    type: boolean
-              examples:
-                Berijmd:
-                  summary: "Psalm 103:8 berijmd"
-                  value:
-                    text: "Gelijk het gras is ons kortstondig leven,\nGelijk een bloem, die op het veld verheven,\nWel sierlijk pronkt, maar kracht'loos is en teêr;\nWanneer de wind zich over 't land laat horen,\nDan knakt haar steel, haar schoonheid gaat verloren;\nMen kent en vindt haar standplaats zelfs niet meer."
-                    psalm: 103
-                    vers: 8
-                    berijmd: true
-                Onberijmd:
-                  summary: "Psalm 103:8 onberijmd"
-                  value:
-                    text: "Barmhartig en genadig is de HEERE, lankmoedig en groot van goedertierenheid."
-                    psalm: 103
-                    vers: 8
-                    berijmd: false
+                $ref: '#/components/schemas/PsalmResponse'
         '404':
-          description: "Het gevraagde vers is niet gevonden."
+          description: "Geen vers gevonden in lokale database of externe bronnen."
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-              example:
-                detail: "Geen berijmde verzen gevonden voor Psalm 103."
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: "Interne serverfout."
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-              example:
-                detail: "Interne serverfout."
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /psalm/max:
-    get:
-      summary: "Geef het maximaal aantal verzen van een psalm"
-      operationId: getMaxPsalmVerses
-      parameters:
-        - name: psalm
-          in: query
-          required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 150
-          description: "Het psalmnummer."
-        - name: berijmd
-          in: query
-          required: false
-          schema:
-            type: boolean
-          description: "Indien 'true', geef aantal verzen in de berijmde versie (1773); standaard onberijmd."
-      responses:
-        '200':
-          description: "Aantal beschikbare verzen voor deze psalm."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  psalm:
-                    type: integer
-                  max_vers:
-                    type: integer
-                  berijmd:
-                    type: boolean
-              example:
-                psalm: 103
-                max_vers: 11
-                berijmd: true
-        '404':
-          description: "Psalm niet gevonden."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-              example:
-                detail: "Psalm niet gevonden."
-        '500':
-          description: "Interne serverfout."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-              example:
-                detail: "Interne serverfout."
-
-  /psalm/list:
-    get:
-      summary: "Geef een lijst met alle beschikbare psalmen"
-      operationId: listPsalms
-      responses:
-        '200':
-          description: "Overzicht van alle psalmen."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  psalmen:
-                    type: array
-                    items:
-                      type: integer
-              example:
-                psalmen: [1, 2, 3, 4, 5, ..., 150]
-        '500':
-          description: "Interne serverfout."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-              example:
-                detail: "Interne serverfout."
-
-  /status/fallback:
-    get:
-      summary: "Check of de fallback-modus actief is"
-      operationId: getFallbackStatus
-      responses:
-        '200':
-          description: "Status van de fallback-modus."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  fallback_active:
-                    type: boolean
-                  detail:
-                    type: string
-              example:
-                fallback_active: false
-                detail: "Externe bron is bereikbaar."
-        '500':
-          description: "Interne serverfout."
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  detail:
-                    type: string
-              example:
-                detail: "Interne serverfout."
+components:
+  schemas:
+    PsalmResponse:
+      type: object
+      properties:
+        text:
+          type: string
+          description: "De tekst van het gevraagde berijmde psalmvers."
+        bron:
+          type: string
+          description: "Bron van het gevonden vers ('lokaal', 'psalmboek.nl', 'liturgie.nu', 'bijbelbox.nl')."
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
