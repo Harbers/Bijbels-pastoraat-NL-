@@ -1,9 +1,16 @@
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from bs4 import BeautifulSoup
+import os
 
-app = FastAPI()
+app = FastAPI(title="Bijbelse Psalmen API", version="1.0")
+
+# ───────────────────────────────────────────────
+# MODELLEN
+# ───────────────────────────────────────────────
 
 class PsalmVers(BaseModel):
     psalm: int
@@ -13,6 +20,10 @@ class PsalmVers(BaseModel):
 
 class Error(BaseModel):
     detail: str
+
+# ───────────────────────────────────────────────
+# SCRAPERS
+# ───────────────────────────────────────────────
 
 async def fetch_from_zingen(ps: int, vs: int):
     url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
@@ -49,6 +60,10 @@ async def fetch_from_refo(ps: int, vs: int):
 
 SCRAPERS = [fetch_from_zingen, fetch_from_old, fetch_from_refo]
 
+# ───────────────────────────────────────────────
+# ROUTES
+# ───────────────────────────────────────────────
+
 @app.get("/api/psalm", response_model=PsalmVers, responses={404: {"model": Error}})
 async def get_psalm_vers(
     psalm: int = Query(..., ge=1, le=150),
@@ -74,3 +89,18 @@ async def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
     if not waarden:
         raise HTTPException(status_code=404, detail=f"Geen verzen gevonden voor Psalm {psalm}.")
     return max(int(v) for v in waarden)
+
+# ───────────────────────────────────────────────
+# PLUGIN EN DOCUMENTATIEBESTANDEN SERVEREN
+# ───────────────────────────────────────────────
+
+@app.get("/.well-known/ai-plugin.json", include_in_schema=False)
+async def serve_ai_plugin():
+    return FileResponse("ai-plugin.json", media_type="application/json")
+
+@app.get("/openapi.yaml", include_in_schema=False)
+async def serve_openapi():
+    return FileResponse("openapi.yaml", media_type="text/yaml")
+
+# Optioneel: voor statische bestanden zoals een logo
+app.mount("/static", StaticFiles(directory="static"), name="static")
