@@ -1,18 +1,18 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Bijbelse Psalmen 1773",
-  "name_for_model": "bijbels_pastoraat",
-  "description_for_human": "Haal berijmde psalmverzen van de 1773-berijming op via psalmboek.nl",
-  "description_for_model": "Gebruik de endpoint GET /api/psalm en GET /api/psalm/max om psalm 1–150 en vers 1–n op te halen uit de 1773-berijming. Geef JSON met velden psalm, vers, text en bron, of 404 met detail.",
+  "name_for_human": "Bijbelse Psalmen Zoeker",
+  "name_for_model": "bijbelse_psalmen",
+  "description_for_human": "Zoek psalmverzen op uit de berijming van 1773",
+  "description_for_model": "Geeft een specifiek psalmvers op basis van nummer en versnummer in berijming 1773",
   "auth": {
     "type": "none"
   },
   "api": {
     "type": "openapi",
-    "url": "https://bijbels-pastoraat-nl.onrender.com/openapi.yaml",
+    "url": "http://91.99.2.139:8000/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "https://bijbels-pastoraat-nl.onrender.com/.well-known/logo.png",
-  "contact_email": "support@bijbels-pastoraat-nl.onrender.com",
-  "legal_info_url": "https://bijbels-pastoraat-nl.onrender.com/privacy"
+  "logo_url": "http://91.99.2.139:8000/static/logo.png",
+  "contact_email": "hans.harbers@solcon.nl",
+  "legal_info_url": "http://91.99.2.139:8000/legal"
 }
