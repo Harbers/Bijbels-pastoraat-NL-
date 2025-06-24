@@ -3,8 +3,8 @@ info:
   title: Bijbelse Psalmen API
   version: "1.0"
 servers:
-  - url: https://bijbels-pastoraat-nl.onrender.com
-    description: Productie-server bij Render
+  - url: http://91.99.2.139:8000
+    description: Lokale VPS-server voor Bijbels-pastoraat
 paths:
   /api/psalm:
     get:
