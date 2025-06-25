@@ -1,0 +1,30 @@
+name: 🚀 Deploy Bijbels-pastoraat-NL
+
+# trigger op push naar main (pas aan als je een andere branch gebruikt)
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Sync files to Hetzner VPS
+        run: |
+          rsync -avz --delete \
+            --exclude '.git*' \
+            ./ root@91.99.2.139:/opt/Bijbels-pastoraat-NL-/
+
+      - name: Restart Bijbels GPT service
+        run: |
+          ssh root@91.99.2.139 'systemctl restart bijbels-gpt.service'
