@@ -1,4 +1,3 @@
-cat > /opt/Bijbels-pastoraat-NL-/ai-plugin.json << 'EOF'
 {
   "schema_version": "v1",
   "name_for_human": "Bijbelse Psalmen Zoeker",
@@ -15,4 +14,3 @@ cat > /opt/Bijbels-pastoraat-NL-/ai-plugin.json << 'EOF'
   "contact_email": "hans.harbers@solcon.nl",
   "legal_info_url": "http://91.99.2.139:8000/legal"
 }
-EOF
