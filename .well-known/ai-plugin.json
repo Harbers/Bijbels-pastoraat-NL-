@@ -1,12 +1,11 @@
+cat > /opt/Bijbels-pastoraat-NL-/ai-plugin.json << 'EOF'
 {
   "schema_version": "v1",
   "name_for_human": "Bijbelse Psalmen Zoeker",
   "name_for_model": "bijbelse_psalmen",
   "description_for_human": "Zoek psalmverzen op uit de berijming van 1773",
   "description_for_model": "Geeft een specifiek psalmvers op basis van nummer en versnummer in berijming 1773",
-  "auth": {
-    "type": "none"
-  },
+  "auth": { "type": "none" },
   "api": {
     "type": "openapi",
     "url": "http://91.99.2.139:8000/openapi.yaml",
@@ -16,3 +15,4 @@
   "contact_email": "hans.harbers@solcon.nl",
   "legal_info_url": "http://91.99.2.139:8000/legal"
 }
+EOF
