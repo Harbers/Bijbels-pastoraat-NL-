@@ -8,7 +8,6 @@ info:
       - GET /api/psalm/vers?psalm={1..150}&vers={1..}
       - GET /api/psalm/max?psalm={1..150}
 servers:
-  - url: http://91.99.2.139:8002
   - url: https://gpt-harbers.duckdns.org
 
 paths:
@@ -34,12 +33,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmVersResponse"
-        "404":
-          description: Niet gevonden
-        "422":
-          description: Validatiefout (query-parameters onjuist)
-        "502":
-          description: Fout bij bron
+        "404": { description: Niet gevonden }
+        "422": { description: Validatiefout (query-parameters onjuist) }
+        "502": { description: Fout bij bron }
 
   /api/psalm/max:
     get:
@@ -58,10 +54,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmMaxResponse"
-        "422":
-          description: Validatiefout (query-parameters onjuist)
-        "502":
-          description: Fout bij bron
+        "422": { description: Validatiefout (query-parameters onjuist) }
+        "502": { description: Fout bij bron }
 
 components:
   schemas:
