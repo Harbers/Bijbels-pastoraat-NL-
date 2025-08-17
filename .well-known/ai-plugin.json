@@ -1,16 +1,16 @@
 {
   "schema_version": "v1",
-  "name_for_human": "Bijbelse Psalmen Zoeker",
-  "name_for_model": "bijbelse_psalmen",
-  "description_for_human": "Zoek psalmverzen op uit de berijming van 1773",
-  "description_for_model": "Geeft een specifiek psalmvers op basis van nummer en versnummer in berijming 1773",
+  "name_for_human": "Bijbels-Pastoraat-NL",
+  "name_for_model": "BijbelsPastoraatNL",
+  "description_for_human": "Haal psalmverzen op uit de officiële berijming van 1773, rechtstreeks van psalmboek.nl.",
+  "description_for_model": "Gebruik altijd de endpoints `getPsalmMax` en `getPsalmVers` voor het ophalen van psalmverzen in de berijming van 1773. Gebruik psalmboek.nl als bron. Vergelijk het opgehaalde vers exact met het vers zoals getoond op psalmboek.nl. Toon géén onberijmde tekst. Geef een foutmelding bij verzen buiten bereik.",
   "auth": { "type": "none" },
   "api": {
     "type": "openapi",
     "url": "http://91.99.2.139:8000/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "http://91.99.2.139:8000/static/logo.png",
-  "contact_email": "hans.harbers@solcon.nl",
+  "logo_url": "http://91.99.2.139:8000/static/logo.svg",
+  "contact_email": "support@bijbels-pastoraat-nl.onrender.com",
   "legal_info_url": "http://91.99.2.139:8000/legal"
 }
