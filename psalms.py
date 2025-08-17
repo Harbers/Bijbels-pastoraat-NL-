@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from .main import client  # de PsalmboekClient instantie
+from .main import client  # PsalmboekClient instantie
 from typing import Optional
 
 router = APIRouter(prefix="/api/psalm", tags=["psalmen"])
@@ -42,3 +42,12 @@ def get_psalm_vers(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fout bij ophalen: {e}")
+
+
+# Healthcheck endpoint
+@router.get("/healthz", include_in_schema=False)
+def healthcheck() -> dict:
+    """
+    Eenvoudige healthcheck voor monitoring (zonder afhankelijkheid externe bron).
+    """
+    return {"status": "ok"}
