@@ -1,34 +1,35 @@
 from fastapi import APIRouter, HTTPException, Query
-from .main import client  # PsalmboekClient instantie
-from typing import Optional
+from .psalm_client import client
 
 router = APIRouter(prefix="/api/psalm", tags=["psalmen"])
 
 
+@router.get("/healthz", include_in_schema=False)
+def healthcheck() -> dict:
+    """Eenvoudige healthcheck van de API zelf (geen externe call)."""
+    return {"status": "ok"}
+
+
 @router.get("/max")
-def get_max_vers(
-    psalm: int = Query(..., description="Psalmnummer (1–150)")
-) -> dict:
-    """
-    Bepaal het maximale versnummer van een psalm.
-    """
+def get_max_vers(psalm: int = Query(..., ge=1, le=150, description="Psalmnummer (1–150)")) -> dict:
+    """Geef het maximale versnummer van de psalm."""
     try:
         max_vers = client.get_max_vers(psalm)
         if max_vers < 1:
             raise HTTPException(status_code=404, detail=f"Geen verzen gevonden voor Psalm {psalm}.")
         return {"psalm": psalm, "max_vers": max_vers}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fout bij ophalen: {e}")
 
 
 @router.get("/vers")
 def get_psalm_vers(
-    psalm: int = Query(..., description="Psalmnummer (1–150)"),
-    vers: int = Query(..., description="Versnummer (>=1)")
+    psalm: int = Query(..., ge=1, le=150, description="Psalmnummer (1–150)"),
+    vers: int = Query(..., ge=1, description="Versnummer (>=1)"),
 ) -> dict:
-    """
-    Haal een specifiek vers op van een psalm.
-    """
+    """Haal de tekst van een specifiek vers op."""
     try:
         max_vers = client.get_max_vers(psalm)
         if vers > max_vers:
@@ -42,12 +43,3 @@ def get_psalm_vers(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fout bij ophalen: {e}")
-
-
-# Healthcheck endpoint
-@router.get("/healthz", include_in_schema=False)
-def healthcheck() -> dict:
-    """
-    Eenvoudige healthcheck voor monitoring (zonder afhankelijkheid externe bron).
-    """
-    return {"status": "ok"}
