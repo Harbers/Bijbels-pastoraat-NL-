@@ -2,15 +2,14 @@ openapi: 3.1.0
 info:
   title: Bijbels-Pastoraat-NL Backend
   version: "1.0.0"
-  description: API voor psalmverzen (1773) via psalmboek.nl
-servers:
-  - url: https://gpt-harbers.duckdns.org
+  description: |
     API voor berijmde psalmverzen (1773) via psalmboek.nl.
     Endpoints:
       - GET /api/psalm?psalm={1..150}&vers={1..}
       - GET /api/psalm/max?psalm={1..150}
 servers:
-  - url: http://91.99.2.139:8000
+  - url: https://gpt-harbers.duckdns.org
+
 paths:
   /api/psalm:
     get:
@@ -19,13 +18,18 @@ paths:
       parameters:
         - in: query
           name: psalm
-          schema: { type: integer, minimum: 1, maximum: 150 }
           required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 150
           description: Psalmnummer 1..150
         - in: query
           name: vers
-          schema: { type: integer, minimum: 1 }
           required: true
+          schema:
+            type: integer
+            minimum: 1
           description: Versnummer 1..max
       responses:
         "200":
@@ -40,6 +44,7 @@ paths:
           description: Niet gevonden
         "502":
           description: Fout bij bron
+
   /api/psalm/max:
     get:
       summary: Bepaal het maximale versnummer van een psalm (1773)
@@ -47,8 +52,11 @@ paths:
       parameters:
         - in: query
           name: psalm
-          schema: { type: integer, minimum: 1, maximum: 150 }
           required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 150
           description: Psalmnummer 1..150
       responses:
         "200":
@@ -59,20 +67,31 @@ paths:
                 $ref: "#/components/schemas/PsalmMaxResponse"
         "502":
           description: Fout bij bron
+
 components:
   schemas:
     PsalmVersResponse:
       type: object
       properties:
-        psalm: { type: integer }
-        vers: { type: integer }
-        text: { type: string }
-        bron: { type: string, format: uri }
+        psalm:
+          type: integer
+        vers:
+          type: integer
+        text:
+          type: string
+        bron:
+          type: string
+          format: uri
       required: [psalm, vers, text, bron]
+
     PsalmMaxResponse:
       type: object
       properties:
-        psalm: { type: integer }
-        max_vers: { type: integer }
-        bron: { type: string, format: uri }
+        psalm:
+          type: integer
+        max_vers:
+          type: integer
+        bron:
+          type: string
+          format: uri
       required: [psalm, max_vers, bron]
