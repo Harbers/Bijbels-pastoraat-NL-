@@ -5,13 +5,14 @@ info:
   description: |
     API voor berijmde psalmverzen (1773) via psalmboek.nl.
     Endpoints:
-      - GET /api/psalm?psalm={1..150}&vers={1..}
+      - GET /api/psalm/vers?psalm={1..150}&vers={1..}
       - GET /api/psalm/max?psalm={1..150}
 servers:
+  - url: http://91.99.2.139:8002
   - url: https://gpt-harbers.duckdns.org
 
 paths:
-  /api/psalm:
+  /api/psalm/vers:
     get:
       summary: Haal exact één vers op uit berijming 1773
       operationId: getPsalmVers
@@ -19,17 +20,12 @@ paths:
         - in: query
           name: psalm
           required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 150
+          schema: { type: integer, minimum: 1, maximum: 150 }
           description: Psalmnummer 1..150
         - in: query
           name: vers
           required: true
-          schema:
-            type: integer
-            minimum: 1
+          schema: { type: integer, minimum: 1 }
           description: Versnummer 1..max
       responses:
         "200":
@@ -38,10 +34,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmVersResponse"
-        "400":
-          description: Vers buiten bereik
         "404":
           description: Niet gevonden
+        "422":
+          description: Validatiefout (query-parameters onjuist)
         "502":
           description: Fout bij bron
 
@@ -53,10 +49,7 @@ paths:
         - in: query
           name: psalm
           required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 150
+          schema: { type: integer, minimum: 1, maximum: 150 }
           description: Psalmnummer 1..150
       responses:
         "200":
@@ -65,6 +58,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmMaxResponse"
+        "422":
+          description: Validatiefout (query-parameters onjuist)
         "502":
           description: Fout bij bron
 
@@ -73,25 +68,16 @@ components:
     PsalmVersResponse:
       type: object
       properties:
-        psalm:
-          type: integer
-        vers:
-          type: integer
-        text:
-          type: string
-        bron:
-          type: string
-          format: uri
+        psalm: { type: integer }
+        vers:  { type: integer }
+        text:  { type: string }
+        bron:  { type: string, format: uri }
       required: [psalm, vers, text, bron]
 
     PsalmMaxResponse:
       type: object
       properties:
-        psalm:
-          type: integer
-        max_vers:
-          type: integer
-        bron:
-          type: string
-          format: uri
+        psalm:    { type: integer }
+        max_vers: { type: integer }
+        bron:     { type: string, format: uri }
       required: [psalm, max_vers, bron]
