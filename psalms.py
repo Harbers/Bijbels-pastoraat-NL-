@@ -1,14 +1,11 @@
-cat >/opt/bijbels-pastoraat/app/psalms.py <<'EOF'
 from fastapi import APIRouter, HTTPException, Query
-from .psalm_client import client
+from psalm_client import client
 
 router = APIRouter(prefix="/api/psalm", tags=["psalmen"])
-
 
 @router.get("/healthz", include_in_schema=False)
 def healthcheck() -> dict:
     return {"status": "ok"}
-
 
 @router.get("/max")
 def get_max_vers(psalm: int = Query(..., ge=1, le=150, description="Psalmnummer (1–150)")) -> dict:
@@ -21,7 +18,6 @@ def get_max_vers(psalm: int = Query(..., ge=1, le=150, description="Psalmnummer 
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fout bij ophalen: {e}")
-
 
 @router.get("/vers")
 def get_psalm_vers(
@@ -41,6 +37,3 @@ def get_psalm_vers(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fout bij ophalen: {e}")
-
-
-EOF
