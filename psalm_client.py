@@ -69,4 +69,93 @@ class PsalmboekClient:
             self._client.headers["User-Agent"] = random.choice(UA_POOL)
             r = self._client.get(url)
         r.raise_for_status()
-        retur
+        return r.text
+
+    def get_max_vers(self, psalm: int) -> int:
+        cache_key = ("max", psalm)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return int(cached)
+
+        html = self._get_html(self._psalm_overview_url(psalm))
+        soup = BeautifulSoup(html, "html.parser")
+
+        candidates: List[int] = []
+
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            m = re.search(r"[?&]vers=(\d+)\b", href)
+            if m:
+                candidates.append(int(m.group(1)))
+            txt = (a.get_text() or "").strip()
+            m2 = re.fullmatch(r"[Vv]ers\s+(\d+)", txt)
+            if m2:
+                candidates.append(int(m2.group(1)))
+
+        for li in soup.find_all("li"):
+            txt = (li.get_text() or "").strip()
+            m = re.search(r"[Vv]ers\s+(\d+)", txt)
+            if m:
+                candidates.append(int(m.group(1)))
+
+        for m in re.finditer(r"[?&]vers=(\d+)\b", html):
+            candidates.append(int(m.group(1)))
+
+        max_vers = max(candidates) if candidates else 1
+        self._cache_set(cache_key, max_vers)
+        return max_vers
+
+    def get_vers(self, psalm: int, vers: int) -> str:
+        cache_key = ("vers", psalm, vers)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return str(cached)
+
+        html = self._get_html(self._vers_url(psalm, vers))
+        soup = BeautifulSoup(html, "html.parser")
+
+        selectors = [
+            "#psalmtekst",
+            "div.verse",
+            "div.strofe",
+            "article.verse",
+            "section.verse",
+            "div.content",
+            "main",
+            "article",
+        ]
+
+        text_lines: List[str] = []
+        found = False
+        for sel in selectors:
+            for container in soup.select(sel):
+                raw = container.get_text("\n").strip()
+                if raw and len(raw) > 10:
+                    candidate = [ln.rstrip() for ln in raw.splitlines()]
+                    candidate = [ln for ln in candidate if ln.strip()]
+                    if candidate:
+                        text_lines = candidate
+                        found = True
+                        break
+            if found:
+                break
+
+        if not found:
+            body = soup.get_text("\n").strip()
+            lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+            text_lines = lines[:12] if lines else []
+
+        if not text_lines:
+            raise ValueError("Kon versregel niet betrouwbaar extraheren uit psalmboek.nl.")
+
+        verse_text = "\n".join(text_lines).strip()
+        verse_text = re.sub(r"\n{3,}", "\n\n", verse_text)
+
+        self._cache_set(cache_key, verse_text)
+        return verse_text
+
+client = PsalmboekClient(
+    base_url=str(settings.PSALM_SOURCE_BASE),
+    berijming=settings.PSALM_BERIJMING,
+    cache_seconds=settings.CACHE_SECONDS,
+)
