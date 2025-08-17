@@ -1,94 +1,101 @@
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-import httpx
-from bs4 import BeautifulSoup
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
+from .schemas import PsalmVersResponse, PsalmMaxResponse
+from .psalms import client
+from .config import settings
+from pathlib import Path
 
 app = FastAPI(
-    title="Bijbelse Psalmen API",
-    version="1.0"
+    title="Bijbels-Pastoraat-NL Backend",
+    version="1.0.0",
+    description="API voor berijmde psalmverzen (1773) via psalmboek.nl",
+    contact={"name": "Bijbels-Pastoraat-NL", "email": "support@bijbels-pastoraat-nl.onrender.com"},
+    license_info={"name": "MIT"},
 )
 
-# Mount the .well-known directory for plugin discovery
-app.mount(
-    "/.well-known",
-    StaticFiles(directory=".well-known", html=False),
-    name="well-known"
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-class PsalmVers(BaseModel):
-    psalm: int
-    vers: int
-    text: str
-    bron: str
 
-class Error(BaseModel):
-    detail: str
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
 
-# Serve openapi.yaml
-@app.get("/openapi.yaml", include_in_schema=False)
-async def serve_openapi():
-    return FileResponse("openapi.yaml", media_type="text/yaml")
 
-# Scraper functions
-t async def fetch_from_zingen(ps: int, vs: int):
-    url = f"https://psalmboek.nl/zingen.php?psalm={ps}&psvID={vs}"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        return None
-    soup = BeautifulSoup(r.text, "html.parser")
-    p = soup.select_one("div.content p") or soup.find("p")
-    if not p:
-        return None
-    return p.get_text(separator="\n", strip=True), url
+@app.get("/healthz", summary="Health check", include_in_schema=False)
+def healthz():
+    return {"status": "ok"}
 
-async def fetch_from_old(ps: int, vs: int):
-    url = f"https://psalmboek.nl/psalm/{ps:03d}/vers/{vs:02d}?berijming=1773"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        return None
-    soup = BeautifulSoup(r.text, "html.parser")
-    stanza = soup.select_one("div.verse-text")
-    if not stanza:
-        return None
-    return stanza.get_text(separator="\n", strip=True), url
 
-async def fetch_from_refo(ps: int, vs: int):
-    url = f"https://content.reformatorischeomroep.nl/psalmen/berijming-1773/{ps}/{vs}.txt"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        return None
-    text = r.text.strip()
-    return (text, url) if text else None
+# Static logo
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-SCRAPERS = [fetch_from_zingen, fetch_from_old, fetch_from_refo]
+@app.get("/static/logo.svg", include_in_schema=False)
+def get_logo():
+    file_path = STATIC_DIR / "logo.svg"
+    if not file_path.exists():
+        return JSONResponse({"error": "logo missing"}, status_code=404)
+    return FileResponse(file_path, media_type="image/svg+xml")
 
-@app.get("/api/psalm", response_model=PsalmVers, responses={404: {"model": Error}})
-async def get_psalm_vers(
-    psalm: int = Query(..., ge=1, le=150),
-    vers: int = Query(..., ge=1)
+
+@app.get(
+    "/api/psalm/max",
+    response_model=PsalmMaxResponse,
+    summary="Bepaal het maximaal beschikbare versnummer voor een psalm (berijming 1773)",
+)
+def get_psalm_max(
+    psalm: int = Query(..., ge=1, le=150, description="Psalmnummer 1..150")
 ):
-    for scraper in SCRAPERS:
-        result = await scraper(psalm, vers)
-        if result:
-            text, bron = result
-            return PsalmVers(psalm=psalm, vers=vers, text=text, bron=bron)
-    raise HTTPException(status_code=404, detail=f"Vers {vers} van Psalm {psalm} kon niet worden opgehaald.")
+    try:
+        max_vers = client.get_max_vers(psalm)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Fout bij ophalen bron: {e}")
 
-@app.get("/api/psalm/max", response_model=int, responses={404: {"model": Error}})
-async def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
-    url = f"https://psalmboek.nl/zingen.php?psalm={psalm}&psvID=0"
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(url)
-    if r.status_code != 200:
-        raise HTTPException(status_code=404, detail=f"Psalm {psalm} niet gevonden.")
-    soup = BeautifulSoup(r.text, "html.parser")
-    opts = soup.select("select[name=psvID] option")
-    waarden = [o["value"] for o in opts if o.get("value", "").isdigit()]
-    if not waarden:
-        raise HTTPException(status_code=404, detail=f"Geen verzen gevonden voor Psalm {psalm}.")
-    return max(int(v) for v in waarden)
+    return PsalmMaxResponse(
+        psalm=psalm,
+        max_vers=max_vers,
+        bron=f"{settings.PSALM_SOURCE_BASE}/berijming/{client.berijming}/psalm/{psalm}",
+    )
+
+
+@app.get(
+    "/api/psalm",
+    response_model=PsalmVersResponse,
+    summary="Haal exact één vers op uit berijming 1773 (psalmboek.nl)",
+)
+def get_psalm_vers(
+    psalm: int = Query(..., ge=1, le=150),
+    vers: int = Query(..., ge=1),
+):
+    # Range-controle tegen max
+    try:
+        max_vers = client.get_max_vers(psalm)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Fout bij ophalen bron: {e}")
+
+    if vers > max_vers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Versnummer valt buiten bereik [1,{max_vers}] voor psalm {psalm}.",
+        )
+
+    try:
+        text = client.get_vers(psalm, vers)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Fout bij ophalen bron: {e}")
+
+    return PsalmVersResponse(
+        psalm=psalm,
+        vers=vers,
+        text=text,
+        bron=f"{settings.PSALM_SOURCE_BASE}/berijming/{client.berijming}/psalm/{psalm}/{vers}",
+    )
