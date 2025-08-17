@@ -1,89 +1,76 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
-  title: Bijbelse Psalmen API
-  version: "1.0"
+  title: Bijbels-Pastoraat-NL Backend
+  version: "1.0.0"
+  description: |
+    API voor berijmde psalmverzen (1773) via psalmboek.nl.
+    Endpoints:
+      - GET /api/psalm?psalm={1..150}&vers={1..}
+      - GET /api/psalm/max?psalm={1..150}
 servers:
   - url: http://91.99.2.139:8000
-    description: Lokale VPS-server voor Bijbels-pastoraat
 paths:
   /api/psalm:
     get:
-      summary: Haal één berijmd psalmvers (1773) op uit meerdere bronnen
-      operationId: get_psalm_vers
+      summary: Haal exact één vers op uit berijming 1773
+      operationId: getPsalmVers
       parameters:
-        - name: psalm
-          in: query
+        - in: query
+          name: psalm
+          schema: { type: integer, minimum: 1, maximum: 150 }
           required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 150
-        - name: vers
-          in: query
+          description: Psalmnummer 1..150
+        - in: query
+          name: vers
+          schema: { type: integer, minimum: 1 }
           required: true
-          schema:
-            type: integer
-            minimum: 1
+          description: Versnummer 1..max
       responses:
         "200":
-          description: Psalmvers gevonden in de 1773-berijming
+          description: Succes
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PsalmVers"
+                $ref: "#/components/schemas/PsalmVersResponse"
+        "400":
+          description: Vers buiten bereik
         "404":
-          description: Vers niet opgehaald
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+          description: Niet gevonden
+        "502":
+          description: Fout bij bron
   /api/psalm/max:
     get:
-      summary: Bepaal maximaal versnummer voor een psalm
-      operationId: get_psalm_max
+      summary: Bepaal het maximale versnummer van een psalm (1773)
+      operationId: getPsalmMax
       parameters:
-        - name: psalm
-          in: query
+        - in: query
+          name: psalm
+          schema: { type: integer, minimum: 1, maximum: 150 }
           required: true
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 150
+          description: Psalmnummer 1..150
       responses:
         "200":
-          description: Max versnummer
+          description: Succes
           content:
             application/json:
               schema:
-                type: integer
-        "404":
-          description: Psalm niet gevonden of geen verzen
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/PsalmMaxResponse"
+        "502":
+          description: Fout bij bron
 components:
   schemas:
-    PsalmVers:
+    PsalmVersResponse:
       type: object
-      required:
-        - psalm
-        - vers
-        - text
-        - bron
       properties:
-        psalm:
-          type: integer
-        vers:
-          type: integer
-        text:
-          type: string
-        bron:
-          type: string
-    Error:
+        psalm: { type: integer }
+        vers: { type: integer }
+        text: { type: string }
+        bron: { type: string, format: uri }
+      required: [psalm, vers, text, bron]
+    PsalmMaxResponse:
       type: object
-      required:
-        - detail
       properties:
-        detail:
-          type: string
+        psalm: { type: integer }
+        max_vers: { type: integer }
+        bron: { type: string, format: uri }
+      required: [psalm, max_vers, bron]
