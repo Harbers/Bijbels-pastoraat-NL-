@@ -1,8 +1,10 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: Bijbels-Pastoraat-NL Backend
   version: "1.0.0"
-  description: |
+  description: API voor psalmverzen (1773) via psalmboek.nl
+servers:
+  - url: https://gpt-harbers.duckdns.org
     API voor berijmde psalmverzen (1773) via psalmboek.nl.
     Endpoints:
       - GET /api/psalm?psalm={1..150}&vers={1..}
