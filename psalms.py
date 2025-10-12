@@ -1,23 +1,20 @@
-cd /root/bijbels-pastoraat-app
-
-cat > psalms.py <<'PY'
-import re, time
-from typing import Dict, Optional
+import re
+import time
+from typing import Dict, Tuple, Any
 import httpx
 from bs4 import BeautifulSoup
 from config import settings
 
 UA = "BijbelsPastoraatNL/1.0 (+https://gpt-harbers.duckdns.org)"
 
-class PsalmboekClient:
-    """Scraper voor psalmboek.nl (berijming 1773) – leest alleen de overzichtspagina /psalmen.php."""
 
+class PsalmboekClient:
+    """Scraper voor psalmboek.nl (berijming 1773) – leest alleen /psalmen.php."""
     def __init__(self, base_url: str, berijming: str, cache_seconds: int = 0):
         self.base_url = base_url.rstrip("/")
         self.berijming = berijming
         self.cache_seconds = max(0, cache_seconds)
-        self._cache: Dict[tuple, tuple[float, object]] = {}
-
+        self._cache: Dict[Tuple[Any, ...], Tuple[float, Any]] = {}
         self._http = httpx.Client(
             http2=True,
             headers={"User-Agent": UA},
@@ -25,14 +22,14 @@ class PsalmboekClient:
             follow_redirects=True,
         )
 
-    # ---------- helpers ----------
     def _overview_url(self, psalm: int) -> str:
-        return f"{self.base_url}/psalmen.php?berijming={self.berijming}&psalm={psalm}"
+        base = self.base_url.rstrip("/")
+        return f"{base}/psalmen.php?berijming={self.berijming}&psalm={psalm}"
 
     def _fetch_overview(self, psalm: int) -> str:
         url = self._overview_url(psalm)
         r = self._http.get(url)
-        if r.status_code == 403:  # eventueel anti-bot
+        if r.status_code == 403:
             r = self._http.get(url, headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
         return r.text
@@ -40,11 +37,12 @@ class PsalmboekClient:
     def _extract_vers_map(self, html: str) -> Dict[int, str]:
         soup = BeautifulSoup(html, "html.parser")
         container = soup.find(id="psalmkolom2") or soup
-
         verses: Dict[int, str] = {}
+
         for p in container.find_all("p"):
             strong = p.find("strong")
             a = strong.find("a") if strong else None
+
             title = ""
             if a and a.get_text():
                 title = a.get_text(strip=True)
@@ -53,7 +51,6 @@ class PsalmboekClient:
 
             m = re.match(r"(?i)^vers\s+(\d+)\b", title)
             if not m:
-                # fallback: soms staat "Vers N" als gewone tekst in <p>
                 m = re.match(r"(?i)^vers\s+(\d+)\b", (p.get_text(strip=True) or ""))
             if not m:
                 continue
@@ -67,7 +64,6 @@ class PsalmboekClient:
 
         return verses
 
-    # ---------- API ----------
     def get_max_vers(self, psalm: int) -> int:
         k = ("max", psalm)
         c = self._cache.get(k)
@@ -76,6 +72,7 @@ class PsalmboekClient:
 
         vmap = self._extract_vers_map(self._fetch_overview(psalm))
         maxv = max(vmap) if vmap else 1
+
         if self.cache_seconds > 0:
             self._cache[k] = (time.time(), maxv)
         return maxv
@@ -89,6 +86,7 @@ class PsalmboekClient:
         vmap = self._extract_vers_map(self._fetch_overview(psalm))
         if vers not in vmap:
             raise ValueError(f"Vers {vers} niet gevonden voor psalm {psalm}.")
+
         txt = vmap[vers]
         if self.cache_seconds > 0:
             self._cache[k] = (time.time(), txt)
@@ -100,4 +98,3 @@ client = PsalmboekClient(
     berijming=settings.PSALM_BERIJMING,
     cache_seconds=settings.CACHE_SECONDS,
 )
-PY
