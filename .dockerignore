@@ -1,34 +1,8 @@
-# .dockerignore
-
-# git itself
-.git
-.gitignore
-
-# Python caches
 __pycache__/
-*.py[cod]
-
-# lokale virtualenvs, logs, databestanden e.d.
+*.pyc
+*.pyo
+*.pyd
 .env
-.venv/
-env/
-*.log
-*.sqlite3
-
-# editor/project‐settings
-.idea/
-.vscode/
-
-# build artefacten, downloads, etc.
-build/
-dist/
-*.egg-info/
-
-# node_modules (als je front‐end hebt)
-node_modules/
-
-# alles wat wél in je image moet blijft over: 
-#  - main.py
-#  - requirements.txt
-#  - openapi.yaml
-#  - de map .well-known/*
+.git/
+.gitignore
+README.md
