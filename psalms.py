@@ -39,41 +39,34 @@ class PsalmboekClient:
         soup = BeautifulSoup(html, "html.parser")
         container = soup.find(id="psalmkolom2") or soup
         verses: Dict[int, str] = {}
-
         for p in container.find_all("p"):
             strong = p.find("strong")
             a = strong.find("a") if strong else None
-
             title = ""
             if a and a.get_text():
                 title = a.get_text(strip=True)
             elif strong and strong.get_text():
                 title = strong.get_text(strip=True)
-
             m = re.match(r"(?i)^vers\s+(\d+)\b", title)
             if not m:
                 m = re.match(r"(?i)^vers\s+(\d+)\b", (p.get_text(strip=True) or ""))
             if not m:
                 continue
-
             v = int(m.group(1))
             raw = p.get_text(separator="\n", strip=True)
             raw = re.sub(rf"(?i)^\s*vers\s+{v}\s*[:.]?\s*", "", raw).replace("\u00A0", " ").strip()
             lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
             if lines:
                 verses[v] = "\n".join(lines)
-
         return verses
 
     def get_max_vers(self, psalm: int) -> int:
         k = ("max", psalm)
         c = self._cache.get(k)
         if c and time.time() - c[0] <= self.cache_seconds:
-            return c[1]  # type: ignore[return-value]
-
+            return c[1]
         vmap = self._extract_vers_map(self._fetch_overview(psalm))
         maxv = max(vmap) if vmap else 1
-
         if self.cache_seconds > 0:
             self._cache[k] = (time.time(), maxv)
         return maxv
@@ -82,12 +75,10 @@ class PsalmboekClient:
         k = ("vers", psalm, vers)
         c = self._cache.get(k)
         if c and time.time() - c[0] <= self.cache_seconds:
-            return c[1]  # type: ignore[return-value]
-
+            return c[1]
         vmap = self._extract_vers_map(self._fetch_overview(psalm))
         if vers not in vmap:
             raise ValueError(f"Vers {vers} niet gevonden voor psalm {psalm}.")
-
         txt = vmap[vers]
         if self.cache_seconds > 0:
             self._cache[k] = (time.time(), txt)
