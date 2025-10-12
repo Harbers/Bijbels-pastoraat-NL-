@@ -1,0 +1,12 @@
+cat > docker-compose.yml <<'YML'
+services:
+  app:
+    build: .
+    image: bijbels-pastoraat:latest
+    container_name: bijbels-pastoraat
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    restart: unless-stopped
+YML
