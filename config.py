@@ -1,4 +1,6 @@
-from pydantic import BaseSettings, AnyHttpUrl
+from pydantic import AnyHttpUrl
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     PSALM_SOURCE_BASE: AnyHttpUrl = "https://psalmboek.nl"
@@ -7,5 +9,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()
