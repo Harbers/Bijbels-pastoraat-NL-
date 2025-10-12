@@ -90,4 +90,3 @@ client = PsalmboekClient(
     cache_seconds=settings.CACHE_SECONDS,
 )
 PY
-
