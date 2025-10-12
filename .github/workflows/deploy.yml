@@ -1,12 +1,59 @@
-- name: Setup SSH
-  run: |
-    mkdir -p ~/.ssh
-    chmod 700 ~/.ssh
-    echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
-    chmod 600 ~/.ssh/id_ed25519
-    ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+name: Deploy Bijbels-pastoraat-NL
 
-- name: Sync files to Hetzner VPS
-  run: |
-    rsync -azv --delete -e "ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/id_ed25519" \
-      ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/bijbels-pastoraat-app/
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-bijbels-pastoraat
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      REMOTE_DIR: /root/bijbels-pastoraat-app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync to server
+        run: |
+          rsync -azv --delete \
+            --exclude ".git" \
+            --exclude ".github/workflows/*" \
+            -e "ssh -p $SSH_PORT -i ~/.ssh/id_ed25519" \
+            ./ "$SSH_USER@$SSH_HOST:$REMOTE_DIR/"
+
+      - name: Restart via Docker Compose
+        run: |
+          ssh -p "$SSH_PORT" -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" <<'SSH'
+            set -e
+            cd /root/bijbels-pastoraat-app
+            docker compose pull || true
+            docker compose build
+            docker compose up -d
+            docker compose ps
+SSH
+
+      - name: Smoke test
+        run: |
+          curl -fsS "http://$SSH_HOST:8000/healthz"
