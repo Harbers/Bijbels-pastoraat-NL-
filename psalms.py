@@ -1,3 +1,5 @@
+cd /root/bijbels-pastoraat-app
+cat > psalms.py <<'PY'
 import re
 import time
 from typing import Dict, Tuple, Any
@@ -6,7 +8,6 @@ from bs4 import BeautifulSoup
 from config import settings
 
 UA = "BijbelsPastoraatNL/1.0 (+https://gpt-harbers.duckdns.org)"
-
 
 class PsalmboekClient:
     """Scraper voor psalmboek.nl (berijming 1773) – leest alleen /psalmen.php."""
@@ -92,9 +93,9 @@ class PsalmboekClient:
             self._cache[k] = (time.time(), txt)
         return txt
 
-
 client = PsalmboekClient(
     base_url=str(settings.PSALM_SOURCE_BASE),
     berijming=settings.PSALM_BERIJMING,
     cache_seconds=settings.CACHE_SECONDS,
 )
+PY
