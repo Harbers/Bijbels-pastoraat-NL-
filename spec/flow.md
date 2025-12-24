@@ -8,11 +8,16 @@ Deze flow is gebaseerd op de ultrakorte system prompt (SV + Psalmen 1773). Hij d
 - Uitzondering: als de gebruiker direct een psalmverzoek doet (herkenbaar per §2), mag de psalmopzoeking doorgaan zonder eerst opnieuw de naamvraag te stellen. Bewaar de naamvraag als reminder voor latere pastorale stappen.
 
 ## 2. Psalm-opzoeking herkennen → `psalm_lookup_1773`
-- Triggerwoorden: `psalm`, `ps`, of impliciete notatie `nummer:vers` zonder boeknaam (bijv. `23:1`, `118:1,2,5`).
-- Patroon: `^\s*(psalm|ps)?\s*(\d{1,3})\s*[:.]\s*([0-9 ,;\-]+)` of varianten met woorden `vers`, `verzen`.
-- Ondersteun meerdere versen en bereiken:
-  - Komma/semicolon gescheiden losse verzen: `118:1,2,5`
-  - Bereiknotaties: `42:2-3`, `psalm 27 vers 1 t/m 4`
+- Triggerwoorden: `psalm`, `ps.`, `ps` of impliciete notatie `nummer:vers` zonder boeknaam (bijv. `23:1`, `118:1,2,5`).
+- Hoofdpatronen:
+  - `^\s*(psalm|ps\.?|ps)?\s*(\d{1,3})\s*[:.]\s*(.+)` (versdeel na `:` of `.`)
+  - `^\s*(psalm|ps\.?|ps)\s*(\d{1,3})\s*(vers|verzen)\s+(.+)` (versdeel na woorden)
+- Versdeel parsing (volledig protocol in `/spec/parsing/psalm_reference_parser.md`):
+  - Normaliseer voegwoorden: vervang ` en `, `&`, `plus` → `,`.
+  - Normaliseer bereiken: vervang `t/m`, `tm`, `tot en met` → `-`.
+  - Split op `,` of `;`; trim; herken bereik `a-b`; eisen: `1 ≤ psalm ≤ 150`, `vers ≥ 1`, en bij bereik `a ≤ b`.
+  - Ondersteunde vormen: losse verzen (`1,2,5`), voegwoorden (`1, 2 en 5`), ranges (`1-3`, `1 t/m 3`), combinaties (`1-3,5`, `1 t/m 3 en 5`).
+  - Normaliseer tot `{ psalm_number: <int>, verses: [<int>, ...] }` waarbij `verses` uniek en oplopend is na range-expansie.
 - Contextueel: wanneer de tekst duidelijk naar een psalm verwijst ("zing psalm 23:1"), routeer naar `psalm_lookup_1773`.
 - Outputcontract: altijd plugin-JSON (geen extra uitleg) via `get_berijmd_psalmvers`; foutmelding conform plugin bij out-of-range.
 
@@ -22,8 +27,9 @@ Deze flow is gebaseerd op de ultrakorte system prompt (SV + Psalmen 1773). Hij d
 - Lever altijd zes open vragen (minstens twee maatschappelijk) en sluit af met uitnodiging tot gebed of stille overdenking, zonder namens God te spreken.
 
 ## 4. Valideren en normaliseren
-- Normaliseer psalmnummer naar integer 1–150. Weiger nummers buiten bereik met de plugin-fouttekst.
-- Split verslijsten door komma/semicolon; bereik `a-b` uitrollen naar start/end-paren voor het schema.
+- Psalmnummer: integer 1–150; alles daarbuiten is `invalid_request`.
+- Verzen: integer ≥ 1; ranges moeten `start ≤ end` en worden volledig uitgerold; duplicates verwijderen en oplopend sorteren.
+- Payload voor router: `{ intent: "psalm_lookup_1773", request: { psalm_number, verses }, status: "ok" } of `"invalid_request"` conform response-schema.
 - Bewaar reeds ontvangen `user_name` in de payload zodat latere lagen de aanspreekvorm kennen.
 
 ## 5. Fallbacks

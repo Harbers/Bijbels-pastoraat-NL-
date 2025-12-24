@@ -7,6 +7,7 @@
       "name": "psalm_lookup_1773",
       "summary": "Haal berijmde psalmverzen (1773) of gezangen 1938 op via de plugin bijbels_pastoraat.get_berijmd_psalmvers.",
       "schema": "./schemas/psalm_lookup_1773.schema.json",
+      "response_schema": "./schemas/psalm_lookup_1773.response.schema.json",
       "routing_hints": [
         "Queries met psalmnummer en vers(en), zoals 'Psalm 23:1', 'ps 42 vers 2 en 3', '118:1,2,5'",
         "Vermeldt expliciet 'psalm', 'ps' of alleen hoofdstuk:vers notatie bij een psalm",

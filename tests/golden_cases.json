@@ -1,110 +1,122 @@
 [
   {
-    "id": "psalm_single_23_1",
-    "utterance": "Psalm 23:1",
+    "id": "psalm_118_list_with_en",
+    "utterance": "Psalm 118: 1, 2 en 5",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 23,
-      "verses": [{ "start": 1 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 118, "verses": [1, 2, 5] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_range_42_2_3",
-    "utterance": "ps 42:2-3",
+    "id": "psalm_118_range_combo",
+    "utterance": "ps 118:1-3,5",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 42,
-      "verses": [{ "start": 2, "end": 3 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 118, "verses": [1, 2, 3, 5] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_multi_118_1_2_5",
-    "utterance": "118:1,2,5",
+    "id": "psalm_23_tm_en",
+    "utterance": "Ps. 23 vers 1 t/m 3 en 6",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 118,
-      "verses": [{ "start": 1 }, { "start": 2 }, { "start": 5 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 23, "verses": [1, 2, 3, 6] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_tmt_range_words",
-    "utterance": "Psalm 1 vers 1 t/m 3",
+    "id": "psalm_91_semicolon_range",
+    "utterance": "psalm 91 verzen 1-4; 6",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 1,
-      "verses": [{ "start": 1, "end": 3 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 91, "verses": [1, 2, 3, 4, 6] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_explicit_multiple",
-    "utterance": "psalm 27 vers 1 en 4",
+    "id": "psalm_119_single",
+    "utterance": "ps 119: 105",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 27,
-      "verses": [{ "start": 1 }, { "start": 4 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 119, "verses": [105] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_question_mark",
-    "utterance": "Mag ik psalm 84:2 horen?",
+    "id": "psalm_118_missing_verses",
+    "utterance": "psalm 118:",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 84,
-      "verses": [{ "start": 2 }]
+      "intent": "psalm_lookup_1773",
+      "status": "invalid_request",
+      "request": { "psalm_number": 118, "verses": [] }
     }
   },
   {
-    "id": "psalm_semicolon_split",
-    "utterance": "ps 91:1;2",
+    "id": "psalm_uppercase_spacing",
+    "utterance": "PSALM   8 : 1 - 2",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 91,
-      "verses": [{ "start": 1 }, { "start": 2 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 8, "verses": [1, 2] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_mixed_range_and_single",
+    "id": "psalm_range_words_spaced",
+    "utterance": "psalm 27 vers 1 t m 3",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 27, "verses": [1, 2, 3] },
+      "status": "ok"
+    }
+  },
+  {
+    "id": "psalm_combo_en_vers",
     "utterance": "Zing psalm 130:3-4 en vers 7",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 130,
-      "verses": [{ "start": 3, "end": 4 }, { "start": 7 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 130, "verses": [3, 4, 7] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_upper_bound",
-    "utterance": "Psalm 150:1",
+    "id": "psalm_simple_colon",
+    "utterance": "ps 3:5",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 150,
-      "verses": [{ "start": 1 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 3, "verses": [5] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_no_keyword",
-    "utterance": "3:5",
+    "id": "psalm_comma_spacing",
+    "utterance": "Psalm 16 vers 1, 2 ,3",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 3,
-      "verses": [{ "start": 5 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 16, "verses": [1, 2, 3] },
+      "status": "ok"
     }
   },
   {
-    "id": "psalm_long_chapter",
-    "utterance": "Psalm 119:105",
+    "id": "psalm_42_dash",
+    "utterance": "ps 42:2-3",
     "expected_intent": "psalm_lookup_1773",
     "expected_payload": {
-      "psalm": 119,
-      "verses": [{ "start": 105 }]
-    }
-  },
-  {
-    "id": "psalm_three_numbers",
-    "utterance": "Psalm 16 vers 1,2,3",
-    "expected_intent": "psalm_lookup_1773",
-    "expected_payload": {
-      "psalm": 16,
-      "verses": [{ "start": 1 }, { "start": 2 }, { "start": 3 }]
+      "intent": "psalm_lookup_1773",
+      "request": { "psalm_number": 42, "verses": [2, 3] },
+      "status": "ok"
     }
   },
   {
