@@ -1,0 +1,255 @@
+[
+  {
+    "id": "psalm_single_23_1",
+    "utterance": "Psalm 23:1",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 23,
+      "verses": [{ "start": 1 }]
+    }
+  },
+  {
+    "id": "psalm_range_42_2_3",
+    "utterance": "ps 42:2-3",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 42,
+      "verses": [{ "start": 2, "end": 3 }]
+    }
+  },
+  {
+    "id": "psalm_multi_118_1_2_5",
+    "utterance": "118:1,2,5",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 118,
+      "verses": [{ "start": 1 }, { "start": 2 }, { "start": 5 }]
+    }
+  },
+  {
+    "id": "psalm_tmt_range_words",
+    "utterance": "Psalm 1 vers 1 t/m 3",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 1,
+      "verses": [{ "start": 1, "end": 3 }]
+    }
+  },
+  {
+    "id": "psalm_explicit_multiple",
+    "utterance": "psalm 27 vers 1 en 4",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 27,
+      "verses": [{ "start": 1 }, { "start": 4 }]
+    }
+  },
+  {
+    "id": "psalm_question_mark",
+    "utterance": "Mag ik psalm 84:2 horen?",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 84,
+      "verses": [{ "start": 2 }]
+    }
+  },
+  {
+    "id": "psalm_semicolon_split",
+    "utterance": "ps 91:1;2",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 91,
+      "verses": [{ "start": 1 }, { "start": 2 }]
+    }
+  },
+  {
+    "id": "psalm_mixed_range_and_single",
+    "utterance": "Zing psalm 130:3-4 en vers 7",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 130,
+      "verses": [{ "start": 3, "end": 4 }, { "start": 7 }]
+    }
+  },
+  {
+    "id": "psalm_upper_bound",
+    "utterance": "Psalm 150:1",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 150,
+      "verses": [{ "start": 1 }]
+    }
+  },
+  {
+    "id": "psalm_no_keyword",
+    "utterance": "3:5",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 3,
+      "verses": [{ "start": 5 }]
+    }
+  },
+  {
+    "id": "psalm_long_chapter",
+    "utterance": "Psalm 119:105",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 119,
+      "verses": [{ "start": 105 }]
+    }
+  },
+  {
+    "id": "psalm_three_numbers",
+    "utterance": "Psalm 16 vers 1,2,3",
+    "expected_intent": "psalm_lookup_1773",
+    "expected_payload": {
+      "psalm": 16,
+      "verses": [{ "start": 1 }, { "start": 2 }, { "start": 3 }]
+    }
+  },
+  {
+    "id": "pastoral_without_name_requests_name",
+    "utterance": "Ik voel me schuldig en zoek pastorale hulp.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "schuld en vergeving",
+      "prompts": {
+        "open_questions": [
+          { "text": "Hoe ervaar je je schuld nu concreet?" },
+          { "text": "Wat helpt je meestal om schuld te benoemen tegenover God?" },
+          { "text": "Welke Bijbeltekst spreekt je hierbij aan?" },
+          { "text": "Hoe raakt dit je relatie tot anderen?", "theme": "maatschappelijk" },
+          { "text": "Waar zie je hoop of uitkomst?" },
+          { "text": "Hoe beïnvloedt dit je keuzes op je werk of in de samenleving?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_with_name_given",
+    "utterance": "Mijn naam is Anna. Kun je me helpen omgaan met rouw?",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "user_name": "Anna",
+      "topic": "rouw",
+      "prompts": {
+        "open_questions": [
+          { "text": "Wat mis je het meest nu?" },
+          { "text": "Welke herinnering troost je?" },
+          { "text": "Hoe beleef je Gods nabijheid in deze periode?" },
+          { "text": "Welke steun ervaar je uit de gemeente?", "theme": "maatschappelijk" },
+          { "text": "Hoe wil je dat vrienden met je meelopen?" },
+          { "text": "Welke vragen leven er over de toekomst van je gezin?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_fear_anxiety",
+    "utterance": "Ik ben bang om mijn baan te verliezen en twijfel aan Gods zorg.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "angst en voorzienigheid",
+      "prompts": {
+        "open_questions": [
+          { "text": "Wat maakt de onzekerheid het zwaarst?" },
+          { "text": "Hoe heb je Gods zorg eerder ervaren?" },
+          { "text": "Met wie kun je hierover spreken?", "theme": "maatschappelijk" },
+          { "text": "Welke Bijbelwoorden geven nu houvast?" },
+          { "text": "Hoe beïnvloedt dit je gebed?" },
+          { "text": "Welke stappen overweeg je richting je werkgever?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_confession",
+    "utterance": "Ik worstel met zonde en weet niet hoe ik belijden moet doen.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "belijden van zonde",
+      "prompts": {
+        "open_questions": [
+          { "text": "Wat wil je tegenover God uitspreken?" },
+          { "text": "Welke hindernissen voel je om te belijden?" },
+          { "text": "Wie kan met je meebidden of luisteren?", "theme": "maatschappelijk" },
+          { "text": "Welke belijdenisgeschrift raakt dit onderwerp?" },
+          { "text": "Hoe ervaar je vergeving in Christus?" },
+          { "text": "Hoe zou herstel richting betrokkenen eruitzien?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_suffering",
+    "utterance": "Ik lijd al jaren aan chronische pijn en voel me alleen.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "lijden en eenzaamheid",
+      "prompts": {
+        "open_questions": [
+          { "text": "Wat maakt de pijn het zwaarst in het dagelijks leven?" },
+          { "text": "Waar merk je troost of lichtpuntjes?" },
+          { "text": "Hoe reageren mensen om je heen?", "theme": "maatschappelijk" },
+          { "text": "Welke Bijbelgedeelten zoeken we samen op?" },
+          { "text": "Hoe wil je dat ik met je meedenk in gebed?" },
+          { "text": "Wat zou je graag delen met je gemeente of artsen?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_justice_social",
+    "utterance": "Ik maak me zorgen over onrecht in mijn stad en hoe ik als christen moet reageren.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "gerechtigheid en maatschappelijke betrokkenheid",
+      "prompts": {
+        "open_questions": [
+          { "text": "Welk onrecht zie je concreet?", "theme": "maatschappelijk" },
+          { "text": "Welke rol neem je nu in?", "theme": "maatschappelijk" },
+          { "text": "Welke Bijbelwoorden verbinden je aan gerechtigheid?" },
+          { "text": "Hoe kan de gemeente ondersteunen?" },
+          { "text": "Wat hoop je in gebed aan de Heere voor te leggen?" },
+          { "text": "Hoe bewaak je je hart tegen verbittering?" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_doubt_faith",
+    "utterance": "Mijn geloof is wankel; ik twijfel of God wel naar mij omziet.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "geloofstwijfel",
+      "prompts": {
+        "open_questions": [
+          { "text": "Wanneer voel je de twijfel het sterkst?" },
+          { "text": "Welke beloften ken je die spreken over Gods nabijheid?" },
+          { "text": "Met wie deel je je vragen?", "theme": "maatschappelijk" },
+          { "text": "Hoe ervaar je de eredienst en prediking nu?" },
+          { "text": "Wat verwacht je van Christus in deze twijfel?" },
+          { "text": "Welke stappen kunnen helpen om in gesprek te blijven met je gemeente?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  },
+  {
+    "id": "pastoral_marriage",
+    "utterance": "We hebben spanningen in ons huwelijk en zoeken richting vanuit het geloof.",
+    "expected_intent": "pastoral_duiding_reformed",
+    "expected_payload": {
+      "topic": "huwelijk en verzoening",
+      "prompts": {
+        "open_questions": [
+          { "text": "Waar lopen jullie nu het meest op vast?" },
+          { "text": "Welke beloften uit de Bijbel geven hoop voor jullie huwelijk?" },
+          { "text": "Hoe praten jullie met elkaar over geloof?" },
+          { "text": "Wie kan jullie als echtpaar begeleiden?", "theme": "maatschappelijk" },
+          { "text": "Welke veranderingen willen jullie zelf inzetten?" },
+          { "text": "Hoe kunnen vrienden of familie ondersteunend zijn?", "theme": "maatschappelijk" }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bijbels-pastoraat.nl/schemas/pastoral_duiding_reformed.schema.json",
+  "title": "pastoral_duiding_reformed",
+  "description": "Pastorale begeleiding en duiding met gereformeerde grondslag, na bevestigde naamvraag.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["topic", "prompts"],
+  "properties": {
+    "user_name": {
+      "type": "string",
+      "description": "Naam zoals verkregen via de openingsvraag. Verplicht voordat reflectie wordt gegeven."
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 3,
+      "description": "Kern van de pastorale vraag of situatie (bijv. rouw, angst, schuld, geloofstwijfel)."
+    },
+    "scripture_refs": {
+      "type": "array",
+      "description": "Optionele lijst van Bijbelverwijzingen die moeten worden geciteerd uit nl_Statenvertaling.txt (exact en cursief).",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Za-z\\s]+\\s[0-9]+:[0-9]+(-[0-9]+)?$",
+        "description": "Standaard boek hoofdstuk:vers notatie, bijvoorbeeld 'Johannes 3:16' of 'Psalm 23:1-3'."
+      }
+    },
+    "prompts": {
+      "type": "object",
+      "description": "Structuur voor de zes open vragen en eventuele maatschappelijke invalshoeken.",
+      "additionalProperties": false,
+      "required": ["open_questions"],
+      "properties": {
+        "open_questions": {
+          "type": "array",
+          "minItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text"],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 5,
+                "description": "Open vraag die uitnodigt tot reflectie. Minstens twee moeten een maatschappelijke invalshoek hebben."
+              },
+              "theme": {
+                "type": "string",
+                "description": "Optioneel thema, bijvoorbeeld maatschappelijk, persoonlijk, ecclesiologisch."
+              }
+            }
+          },
+          "description": "Zes open vragen (minimaal) per de system prompt, met Christus centraal."
+        },
+        "confessional_refs": {
+          "type": "array",
+          "description": "Verwijzingen naar Heidelbergse Catechismus, NGB of Dordtse Leerregels.",
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        }
+      }
+    }
+  }
+}
