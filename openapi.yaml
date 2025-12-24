@@ -14,7 +14,7 @@ paths:
   /api/psalm/vers:
     get:
       summary: Haal exact één vers op uit berijming 1773
-      operationId: getPsalmVers
+      operationId: get_berijmd_psalmvers
       parameters:
         - in: query
           name: psalm
@@ -33,6 +33,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PsalmVersResponse"
+        "400": { description: Buiten bereik of niet gevonden }
         "404": { description: Niet gevonden }
         "422": { description: Validatiefout (query-parameters onjuist) }
         "502": { description: Fout bij bron }
@@ -40,7 +41,7 @@ paths:
   /api/psalm/max:
     get:
       summary: Bepaal het maximale versnummer van een psalm (1773)
-      operationId: getPsalmMax
+      operationId: get_psalm_max
       parameters:
         - in: query
           name: psalm
