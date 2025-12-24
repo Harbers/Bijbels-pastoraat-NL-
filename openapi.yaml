@@ -7,6 +7,7 @@ info:
     Endpoints:
       - GET /api/psalm/vers?psalm={1..150}&vers={1..}
       - GET /api/psalm/max?psalm={1..150}
+      - GET /api/psalm/lookup?query=<psalmverzoek>
 servers:
   - url: https://gpt-harbers.duckdns.org
 
@@ -58,6 +59,26 @@ paths:
         "422": { description: Validatiefout (query-parameters onjuist) }
         "502": { description: Fout bij bron }
 
+  /api/psalm/lookup:
+    get:
+      summary: Normaliseer psalmverzoek (berijming 1773) en haal verzen op
+      operationId: psalm_lookup_1773
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: "Bijv. 'Psalm 118: 1, 2 en 5' of 'ps 118:1-3,5'"
+      responses:
+        "200":
+          description: Schema-conform resultaat (ok/invalid_request/not_found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PsalmLookup1773Response"
+        "404": { description: Vers niet gevonden in bron } 
+        "502": { description: Fout bij bron of verificatie }
+
 components:
   schemas:
     PsalmVersResponse:
@@ -76,3 +97,43 @@ components:
         max_vers: { type: integer }
         bron:     { type: string, format: uri }
       required: [psalm, max_vers, bron]
+
+    PsalmLookup1773Response:
+      type: object
+      additionalProperties: false
+      required: [intent, request, status]
+      properties:
+        intent:
+          type: string
+          const: psalm_lookup_1773
+        request:
+          type: object
+          required: [psalm_number, verses]
+          properties:
+            psalm_number:
+              type: integer
+              minimum: 1
+              maximum: 150
+            verses:
+              type: array
+              minItems: 0
+              items:
+                type: integer
+                minimum: 1
+        status:
+          type: string
+          enum: [ok, not_found, verification_failed, invalid_request]
+        result:
+          type: object
+          additionalProperties: false
+          properties:
+            verified: { type: boolean }
+            message: { type: string }
+            verses:
+              type: array
+              items:
+                type: object
+                required: [verse, text]
+                properties:
+                  verse: { type: integer, minimum: 1 }
+                  text: { type: string }

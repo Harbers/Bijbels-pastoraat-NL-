@@ -1,10 +1,14 @@
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse, Response, HTMLResponse
+from typing import Any, Dict, List
 
-from schemas import PsalmVersResponse, PsalmMaxResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+
 from config import settings
+from psalm_parser import ParsedPsalmReference, parse_psalm_reference
 from psalms import client
+from response_validation import ensure_response_matches_schema
+from schemas import PsalmMaxResponse, PsalmVersResponse
 
 app = FastAPI(
     title="Bijbels-Pastoraat-NL Backend",
@@ -34,12 +38,24 @@ def root():
 def healthz():
     return {"status": "ok"}
 
+
+def _schema_response(payload: Dict[str, Any], *, status_code: int = 200) -> JSONResponse:
+    try:
+        ensure_response_matches_schema(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse(content=payload, status_code=status_code)
+
 OPENAPI_YAML = """openapi: 3.1.0
 info:
   title: Bijbels-Pastoraat-NL Backend
   version: "1.0.0"
   description: |
     API voor berijmde psalmverzen (1773) via psalmboek.nl
+    Endpoints:
+      - GET /api/psalm/vers?psalm={1..150}&vers={1..}
+      - GET /api/psalm/max?psalm={1..150}
+      - GET /api/psalm/lookup?query=<psalmverzoek>
 servers:
   - url: https://gpt-harbers.duckdns.org
 paths:
@@ -73,6 +89,19 @@ paths:
       responses:
         "200": { description: Succes }
         "502": { description: Fout bij bron }
+  /api/psalm/lookup:
+    get:
+      summary: Normaliseer psalmverzoek (berijming 1773) en haal verzen op
+      operationId: psalm_lookup_1773
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200": { description: Schema-conform resultaat }
+        "404": { description: Vers niet gevonden in bron }
+        "502": { description: Fout bij bron of verificatie }
 """
 @app.get("/openapi.yaml", include_in_schema=False)
 def openapi_yaml():
@@ -116,6 +145,69 @@ def legal():
     return "<h1>Privacybeleid</h1><p>Geen persoonsgegevens worden opgeslagen.</p>"
 
 # --- API ---------------------------------------------------------------------
+
+
+@app.get("/api/psalm/lookup")
+def psalm_lookup(query: str = Query(..., min_length=1)):
+    parsed: ParsedPsalmReference = parse_psalm_reference(query)
+
+    if parsed.status != "ok":
+        return _schema_response(parsed.to_dict())
+
+    psalm_number = int(parsed.request["psalm_number"])
+    verses: List[int] = list(parsed.request["verses"])
+
+    try:
+        max_vers = client.get_max_vers(psalm_number)
+    except Exception as exc:  # pragma: no cover - exercised via integration test
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "verification_failed",
+            "request": parsed.request,
+            "result": {"message": f"Fout bij bron: {exc}"},
+        }
+        return _schema_response(payload, status_code=502)
+
+    out_of_range = [v for v in verses if v > max_vers]
+    if out_of_range:
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "not_found",
+            "request": parsed.request,
+            "result": {"message": f"Vers {out_of_range[0]} van Psalm {psalm_number} kon niet worden opgehaald."},
+        }
+        return _schema_response(payload, status_code=404)
+
+    verse_payloads: List[Dict[str, Any]] = []
+    try:
+        for verse in verses:
+            text = client.get_vers(psalm_number, verse)
+            verse_payloads.append({"verse": verse, "text": text})
+    except ValueError:
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "not_found",
+            "request": parsed.request,
+            "result": {"message": f"Vers {verse} van Psalm {psalm_number} kon niet worden opgehaald."},
+        }
+        return _schema_response(payload, status_code=404)
+    except Exception as exc:  # pragma: no cover - exercised via integration test
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "verification_failed",
+            "request": parsed.request,
+            "result": {"message": f"Fout bij bron: {exc}"},
+        }
+        return _schema_response(payload, status_code=502)
+
+    payload = {
+        "intent": "psalm_lookup_1773",
+        "status": "ok",
+        "request": parsed.request,
+        "result": {"verified": True, "verses": verse_payloads},
+    }
+    return _schema_response(payload)
+
 
 @app.get("/api/psalm/max", response_model=PsalmMaxResponse)
 def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):

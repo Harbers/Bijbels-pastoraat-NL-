@@ -3,7 +3,6 @@ import time
 from typing import Dict
 
 import httpx
-from bs4 import BeautifulSoup
 
 from config import settings
 
@@ -37,6 +36,8 @@ class PsalmboekClient:
         return response.text
 
     def _extract_vers_map(self, html: str) -> Dict[int, str]:
+        from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(html, "html.parser")
         container = soup.find(id="psalmkolom2") or soup
         verses: Dict[int, str] = {}
