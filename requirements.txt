@@ -1,8 +1,7 @@
-cat > requirements.txt <<'REQ'
 httpx[http2]
 beautifulsoup4
 pydantic
 pydantic-settings
 fastapi
 uvicorn[standard]
-REQ
+pytest

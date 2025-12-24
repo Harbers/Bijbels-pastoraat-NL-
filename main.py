@@ -1,10 +1,14 @@
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse, Response, HTMLResponse
+from typing import Any, Dict, List
 
-from schemas import PsalmVersResponse, PsalmMaxResponse
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+
 from config import settings
+from psalm_parser import ParsedPsalmReference, parse_psalm_reference
 from psalms import client
+from response_validation import ensure_response_matches_schema
+from schemas import PsalmMaxResponse, PsalmVersResponse
 
 app = FastAPI(
     title="Bijbels-Pastoraat-NL Backend",
@@ -34,19 +38,31 @@ def root():
 def healthz():
     return {"status": "ok"}
 
+
+def _schema_response(payload: Dict[str, Any], *, status_code: int = 200) -> JSONResponse:
+    try:
+        ensure_response_matches_schema(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse(content=payload, status_code=status_code)
+
 OPENAPI_YAML = """openapi: 3.1.0
 info:
   title: Bijbels-Pastoraat-NL Backend
   version: "1.0.0"
   description: |
     API voor berijmde psalmverzen (1773) via psalmboek.nl
+    Endpoints:
+      - GET /api/psalm/vers?psalm={1..150}&vers={1..}
+      - GET /api/psalm/max?psalm={1..150}
+      - GET /api/psalm/lookup?query=<psalmverzoek>
 servers:
   - url: https://gpt-harbers.duckdns.org
 paths:
-  /api/psalm:
+  /api/psalm/vers:
     get:
-      summary: Haal exact één vers op
-      operationId: getPsalmVers
+      summary: Haal exact één vers op uit berijming 1773
+      operationId: get_berijmd_psalmvers
       parameters:
         - in: query
           name: psalm
@@ -58,10 +74,13 @@ paths:
           schema: { type: integer, minimum: 1 }
       responses:
         "200": { description: Succes }
+        "400": { description: Buiten bereik of niet gevonden }
+        "404": { description: Niet gevonden }
+        "502": { description: Fout bij bron }
   /api/psalm/max:
     get:
       summary: Max vers
-      operationId: getPsalmMax
+      operationId: get_psalm_max
       parameters:
         - in: query
           name: psalm
@@ -69,6 +88,20 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 150 }
       responses:
         "200": { description: Succes }
+        "502": { description: Fout bij bron }
+  /api/psalm/lookup:
+    get:
+      summary: Normaliseer psalmverzoek (berijming 1773) en haal verzen op
+      operationId: psalm_lookup_1773
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200": { description: Schema-conform resultaat }
+        "404": { description: Vers niet gevonden in bron }
+        "502": { description: Fout bij bron of verificatie }
 """
 @app.get("/openapi.yaml", include_in_schema=False)
 def openapi_yaml():
@@ -79,9 +112,17 @@ def manifest():
     return JSONResponse({
         "schema_version": "v1",
         "name_for_human": "Bijbels-Pastoraat-NL",
-        "name_for_model": "BijbelsPastoraatNL",
+        "name_for_model": "bijbels_pastoraat",
         "description_for_human": "Haal psalmverzen op uit de officiële berijming van 1773.",
-        "description_for_model": "Gebruik getPsalmMax en getPsalmVers; bron psalmboek.nl (1773).",
+        "description_for_model": (
+            "Ultrakorte System Prompt – Bijbelse Pastorale Zorg (SV + Psalmen 1773). "
+            "Start met de vraag: 'Hoe mag ik je noemen, zodat ik persoonlijk met je kan spreken?' en wacht op antwoord. "
+            "Gebruik nl_Statenvertaling.txt voor onberijmde Bijbelteksten; citeer exact, geen parafrase. "
+            "Voor berijmde psalmen en gezangen gebruik altijd de plugin bijbels_pastoraat.get_berijmd_psalmvers "
+            "(GET /api/psalm/vers). Toon uitsluitend plugin-JSON; plugin-fout: 'Vers <x> van Psalm <y> kon niet worden opgehaald.' "
+            "Reflecties: gereformeerd, Christus-centraal, warm en respectvol; zes open vragen bij pastorale begeleiding, "
+            "minstens twee maatschappelijk. Geen handelingen namens God; verwijs naar belijdenis.nu."
+        ),
         "auth": {"type": "none"},
         "api": {"type": "openapi", "url": "https://gpt-harbers.duckdns.org/openapi.yaml", "is_user_authenticated": False},
         "logo_url": "https://gpt-harbers.duckdns.org/static/logo.svg",
@@ -105,6 +146,69 @@ def legal():
 
 # --- API ---------------------------------------------------------------------
 
+
+@app.get("/api/psalm/lookup")
+def psalm_lookup(query: str = Query(..., min_length=1)):
+    parsed: ParsedPsalmReference = parse_psalm_reference(query)
+
+    if parsed.status != "ok":
+        return _schema_response(parsed.to_dict())
+
+    psalm_number = int(parsed.request["psalm_number"])
+    verses: List[int] = list(parsed.request["verses"])
+
+    try:
+        max_vers = client.get_max_vers(psalm_number)
+    except Exception as exc:  # pragma: no cover - exercised via integration test
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "verification_failed",
+            "request": parsed.request,
+            "result": {"message": f"Fout bij bron: {exc}"},
+        }
+        return _schema_response(payload, status_code=502)
+
+    out_of_range = [v for v in verses if v > max_vers]
+    if out_of_range:
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "not_found",
+            "request": parsed.request,
+            "result": {"message": f"Vers {out_of_range[0]} van Psalm {psalm_number} kon niet worden opgehaald."},
+        }
+        return _schema_response(payload, status_code=404)
+
+    verse_payloads: List[Dict[str, Any]] = []
+    try:
+        for verse in verses:
+            text = client.get_vers(psalm_number, verse)
+            verse_payloads.append({"verse": verse, "text": text})
+    except ValueError:
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "not_found",
+            "request": parsed.request,
+            "result": {"message": f"Vers {verse} van Psalm {psalm_number} kon niet worden opgehaald."},
+        }
+        return _schema_response(payload, status_code=404)
+    except Exception as exc:  # pragma: no cover - exercised via integration test
+        payload = {
+            "intent": "psalm_lookup_1773",
+            "status": "verification_failed",
+            "request": parsed.request,
+            "result": {"message": f"Fout bij bron: {exc}"},
+        }
+        return _schema_response(payload, status_code=502)
+
+    payload = {
+        "intent": "psalm_lookup_1773",
+        "status": "ok",
+        "request": parsed.request,
+        "result": {"verified": True, "verses": verse_payloads},
+    }
+    return _schema_response(payload)
+
+
 @app.get("/api/psalm/max", response_model=PsalmMaxResponse)
 def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
     try:
@@ -117,7 +221,7 @@ def get_psalm_max(psalm: int = Query(..., ge=1, le=150)):
         bron=f"{settings.PSALM_SOURCE_BASE}/psalmen.php?berijming={client.berijming}&psalm={psalm}",
     )
 
-@app.get("/api/psalm", response_model=PsalmVersResponse)
+@app.get("/api/psalm/vers", response_model=PsalmVersResponse)
 def get_psalm_vers(psalm: int = Query(..., ge=1, le=150), vers: int = Query(..., ge=1)):
     try:
         max_vers = client.get_max_vers(psalm)
@@ -125,12 +229,12 @@ def get_psalm_vers(psalm: int = Query(..., ge=1, le=150), vers: int = Query(...,
         raise HTTPException(status_code=502, detail=f"Fout bij ophalen bron: {e}")
 
     if vers > max_vers:
-        raise HTTPException(status_code=400, detail=f"Versnummer valt buiten bereik [1,{max_vers}] voor psalm {psalm}.")
+        raise HTTPException(status_code=400, detail=f"Vers {vers} van Psalm {psalm} kon niet worden opgehaald.")
 
     try:
         text = client.get_vers(psalm, vers)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Vers {vers} van Psalm {psalm} kon niet worden opgehaald.")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Fout bij ophalen bron: {e}")
 

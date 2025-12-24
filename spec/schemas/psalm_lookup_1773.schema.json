@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bijbels-pastoraat.nl/schemas/psalm_lookup_1773.schema.json",
+  "title": "psalm_lookup_1773",
+  "description": "Aanvraag voor berijmde psalmverzen (1773) via de plugin, na parsing en normalisatie in laag 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["psalm_number", "verses"],
+  "properties": {
+    "psalm_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 150,
+      "description": "Psalmnummer (1-150)."
+    },
+    "verses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Unieke, oplopend gesorteerde lijst van verzen die moeten worden opgehaald.",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Versnummer (≥1)."
+      }
+    },
+    "user_name": {
+      "type": "string",
+      "description": "Naam zoals gegeven in de openingsvraag, indien al bekend."
+    },
+    "source": {
+      "type": "string",
+      "const": "berijming_1773",
+      "description": "Vaste aanduiding voor de berijmde psalmen 1773 (frontend/plugin bron)."
+    },
+    "validation": {
+      "type": "object",
+      "description": "Validatie-informatie voor bereikcontrole tegen get_psalm_max.",
+      "additionalProperties": false,
+      "properties": {
+        "max_verses_checked": {
+          "type": "boolean",
+          "description": "Geeft aan of de router/agent het maximum via get_psalm_max heeft gecontroleerd."
+        }
+      }
+    }
+  }
+}
