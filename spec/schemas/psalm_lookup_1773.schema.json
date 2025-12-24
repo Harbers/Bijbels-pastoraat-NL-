@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bijbels-pastoraat.nl/schemas/psalm_lookup_1773.schema.json",
+  "title": "psalm_lookup_1773",
+  "description": "Aanvraag voor berijmde psalmverzen (1773) of gezangen 1938 via de plugin.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["psalm", "verses"],
+  "properties": {
+    "psalm": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 150,
+      "description": "Psalmnummer (1-150). Gezangen 1938 kunnen via een afgesproken mapping of apart nummerbereik worden toegevoegd zodra beschikbaar."
+    },
+    "verses": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Lijst van verzen of bereikjes die moeten worden opgehaald en in plugin-JSON teruggegeven.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start"],
+        "properties": {
+          "start": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Eerste vers dat moet worden opgehaald."
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optioneel: laatste vers in een bereik; indien afwezig, haal alleen het startvers op."
+          }
+        }
+      }
+    },
+    "user_name": {
+      "type": "string",
+      "description": "Naam zoals gegeven in de openingsvraag, indien al bekend."
+    },
+    "source": {
+      "type": "string",
+      "const": "berijming_1773",
+      "description": "Vaste aanduiding voor de berijmde psalmen 1773 (frontend/plugin bron)."
+    },
+    "validation": {
+      "type": "object",
+      "description": "Validatie-informatie voor bereikcontrole tegen get_psalm_max.",
+      "additionalProperties": false,
+      "properties": {
+        "max_verses_checked": {
+          "type": "boolean",
+          "description": "Geeft aan of de router/agent het maximum via get_psalm_max heeft gecontroleerd."
+        }
+      }
+    }
+  }
+}

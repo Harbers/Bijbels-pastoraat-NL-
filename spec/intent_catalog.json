@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "name": "Bijbels Pastoraat NL – intent catalog",
+  "description": "Top-level contract for layer 1 routing based on the ultrakorte system prompt (SV + Psalmen 1773).",
+  "intents": [
+    {
+      "name": "psalm_lookup_1773",
+      "summary": "Haal berijmde psalmverzen (1773) of gezangen 1938 op via de plugin bijbels_pastoraat.get_berijmd_psalmvers.",
+      "schema": "./schemas/psalm_lookup_1773.schema.json",
+      "routing_hints": [
+        "Queries met psalmnummer en vers(en), zoals 'Psalm 23:1', 'ps 42 vers 2 en 3', '118:1,2,5'",
+        "Vermeldt expliciet 'psalm', 'ps' of alleen hoofdstuk:vers notatie bij een psalm",
+        "Verwacht pure plugin-JSON in de output, geen parafrase of extra commentary"
+      ],
+      "notes": [
+        "Gebruik alleen de berijming van 1773 via de plugin; citeer niet uit andere bronnen.",
+        "Controleer met get_psalm_max of verzen binnen bereik vallen; meld fout bij overschrijding.",
+        "Geen uitleg vooraf; toon plugin-JSON direct bij psalmopzoeking."
+      ]
+    },
+    {
+      "name": "pastoral_duiding_reformed",
+      "summary": "Pastorale duiding en reflecties met gereformeerde grondslag, na het stellen van de naamvraag indien nog onbekend.",
+      "schema": "./schemas/pastoral_duiding_reformed.schema.json",
+      "routing_hints": [
+        "Open vragen over geloof, troost, zonde, vergeving, lijden, maatschappelijke thema's",
+        "Geen directe psalmverwijzing of versnotatie; algemene pastorale hulp",
+        "Moet warm, helder, schriftgetrouw en gereformeerd-theologisch verantwoord zijn"
+      ],
+      "notes": [
+        "Start altijd met de naamvraag: 'Hoe mag ik je noemen, zodat ik persoonlijk met je kan spreken?' en wacht op antwoord voordat verdere duiding volgt, tenzij de gebruiker al een naam gaf.",
+        "Bijbelcitaten uit nl_Statenvertaling.txt, cursief citeren en exact overnemen.",
+        "Reflecties bevatten zes open vragen (minstens twee maatschappelijk), Christus centraal."
+      ]
+    }
+  ]
+}
